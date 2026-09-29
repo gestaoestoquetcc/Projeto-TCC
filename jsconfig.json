@@ -7,9 +7,10 @@
       "@components/*": ["src/components/*"],
       "@pages/*": ["src/pages/*"],
       "@sections/*": ["src/sections/*"],
-      "@services/*": ["src/services/*"],
+      "@services/*": ["src/utils/*"],
       "@hooks/*": ["src/hooks/*"],
-      "@theme/*": ["src/theme/*"]
+      "@theme/*": ["src/theme/*"],
+      "@data/*": ["src/data/*"],
     }
   },
   "include": ["src"]

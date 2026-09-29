@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   FiGrid, 
   FiLayers, 
@@ -12,13 +13,15 @@ import {
 import { RiShieldFlashFill } from 'react-icons/ri';
 
 export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleDark }) {
+  const navigate = useNavigate();
+
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: FiGrid },
-    { id: 'pecas', label: 'Peças', icon: FiLayers },
-    { id: 'previsao', label: 'Previsão IA', icon: FiTrendingUp },
-    { id: 'movimentacao', label: 'Entrada/Saída', icon: FiRepeat },
-    { id: 'fornecedores', label: 'Fornecedores', icon: FiTruck },
-    { id: 'configuracoes', label: 'Configurações', icon: FiSettings },
+    { id: 'dashboard', label: 'Dashboard', icon: FiGrid, path: '/' },
+    { id: 'pecas', label: 'Peças', icon: FiLayers, path: '/pecas' },
+    { id: 'previsao', label: 'Previsão IA', icon: FiTrendingUp, path: '/previsao' },
+    { id: 'movimentacao', label: 'Entrada/Saída', icon: FiRepeat, path: '/movimentacao' },
+    { id: 'fornecedores', label: 'Fornecedores', icon: FiTruck, path: '/fornecedores' },
+    { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/configuracoes' },
   ];
 
   return (
@@ -52,6 +55,7 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
                 <button
                   key={item.id}
                   type="button"
+                  onClick={() => item.path && navigate(item.path)}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all group ${
                     isActive
                       ? 'bg-[#1e1b18] text-amber-400 shadow-sm'

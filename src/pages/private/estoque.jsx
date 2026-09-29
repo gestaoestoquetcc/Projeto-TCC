@@ -1,8 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   FiSearch, 
   FiPlus, 
-  FiZap 
+  FiZap,
+  FiLoader,
+  FiRefreshCw,
+  FiAlertCircle
 } from 'react-icons/fi';
 import { 
   RiGasStationLine, 
@@ -12,34 +15,36 @@ import {
 import Sidebar from '../../components/layout/Sidebar';
 import PecasTable from '../../components/pecas/PecasTable';
 import NovaPecaModal from '../../components/pecas/NovaPecaModal';
-import { initialPecas } from '../../data/mockPecas';
-
-const STORAGE_KEY = 'autostock_pecas_data';
+import { getPecas, insertPeca } from '../../services/pecasService';
 
 export default function EstoquePage() {
-  const [pecas, setPecas] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // Fallback
-    }
-    return initialPecas;
-  });
+  const [pecas, setPecas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [busca, setBusca] = useState('');
   const [filtroSegmento, setFiltroSegmento] = useState('todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
 
-  // Persistir sempre que a lista de peças mudar
-  useEffect(() => {
+  // Carregar peças direto do Supabase
+  const carregarPecas = useCallback(async () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(pecas));
-    } catch {
-      // ignore
+      setLoading(true);
+      setError(null);
+      const data = await getPecas();
+      setPecas(data);
+    } catch (err) {
+      console.error('Falha ao buscar peças:', err);
+      setError('Não foi possível carregar os dados do Supabase. Verifique sua conexão ou credenciais.');
+    } finally {
+      setLoading(false);
     }
-  }, [pecas]);
+  }, []);
+
+  useEffect(() => {
+    carregarPecas();
+  }, [carregarPecas]);
 
   // Filtragem de busca e segmento
   const pecasFiltradas = useMemo(() => {
@@ -49,7 +54,7 @@ export default function EstoquePage() {
         return false;
       }
 
-      // Filtro de texto (busca por código, OEM, nome, fabricante)
+      // Filtro de texto (busca por código, OEM, nome, categoria)
       if (!busca.trim()) return true;
 
       const query = busca.toLowerCase();
@@ -57,18 +62,17 @@ export default function EstoquePage() {
         item.codigo.toLowerCase().includes(query) ||
         item.oem.toLowerCase().includes(query) ||
         item.nome.toLowerCase().includes(query) ||
+        item.categoria.toLowerCase().includes(query) ||
         item.fabricante.toLowerCase().includes(query)
       );
     });
   }, [pecas, busca, filtroSegmento]);
 
-  const handleSalvarNovaPeca = (novaPeca) => {
-    setPecas((prev) => [novaPeca, ...prev]);
-  };
-
-  const handleResetData = () => {
-    setPecas(initialPecas);
-    localStorage.removeItem(STORAGE_KEY);
+  // Cadastrar nova peça no Supabase
+  const handleSalvarNovaPeca = async (novaPecaPayload) => {
+    const novaPecaSalva = await insertPeca(novaPecaPayload);
+    // Adiciona na lista sem precisar de reload completo
+    setPecas((prev) => [novaPecaSalva, ...prev]);
   };
 
   return (
@@ -88,21 +92,26 @@ export default function EstoquePage() {
             Inventário
           </span>
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight uppercase">
-              Catálogo de Peças
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight uppercase">
+                Catálogo de Peças
+              </h1>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Supabase Conectado
+              </span>
+            </div>
 
-            {/* Ação rápida para resetar se desejar */}
-            {pecas.length !== initialPecas.length && (
-              <button
-                type="button"
-                onClick={handleResetData}
-                className="text-xs text-gray-400 hover:text-amber-700 underline transition-colors"
-                title="Restaura os dados originais do mock"
-              >
-                Restaurar 8 peças originais
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={carregarPecas}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-amber-800 transition-colors p-2 rounded-lg hover:bg-black/5 disabled:opacity-50"
+              title="Recarregar dados do Supabase"
+            >
+              <FiRefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </button>
           </div>
         </header>
 
@@ -195,15 +204,37 @@ export default function EstoquePage() {
           </div>
         </section>
 
-        {/* Tabela de Peças */}
-        <section className="bg-transparent mt-2">
-          <PecasTable 
-            pecas={pecasFiltradas} 
-            onSelectPeca={(peca) => {
-              console.log('Peça selecionada:', peca);
-            }} 
-          />
-        </section>
+        {/* Estados de Loading, Erro ou Tabela */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-24 bg-white/60 rounded-xl border border-[#e8e4db]">
+            <FiLoader className="w-8 h-8 text-amber-600 animate-spin mb-3" />
+            <span className="text-sm font-semibold text-gray-600">
+              Carregando estoque do Supabase...
+            </span>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-16 bg-red-50/80 rounded-xl border border-red-200 text-center px-4">
+            <FiAlertCircle className="w-8 h-8 text-red-500 mb-2" />
+            <h3 className="text-base font-bold text-red-800 mb-1">Falha na conexão</h3>
+            <p className="text-xs text-red-600 max-w-md mb-4">{error}</p>
+            <button
+              type="button"
+              onClick={carregarPecas}
+              className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Tentar Novamente
+            </button>
+          </div>
+        ) : (
+          <section className="bg-transparent mt-2">
+            <PecasTable 
+              pecas={pecasFiltradas} 
+              onSelectPeca={(peca) => {
+                console.log('Peça selecionada:', peca);
+              }} 
+            />
+          </section>
+        )}
 
         {/* Modal de Nova Peça */}
         <NovaPecaModal

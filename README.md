@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ```
 src/
 │
@@ -32,3 +33,7 @@ src/
 └── theme/               # Customização do Tema do Material UI
 ```
 
+=======
+# Projeto-TCC
+Repositório destinado ao desenvolvimento de tcc
+>>>>>>> 1131fb9a92dd579cb90ac87b602e80e93128ae98
