@@ -18,7 +18,7 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: FiGrid, path: '/' },
     { id: 'pecas', label: 'Peças', icon: FiLayers, path: '/pecas' },
-    { id: 'previsao', label: 'Previsão IA', icon: FiTrendingUp, path: '/previsao' },
+    { id: 'previsao', label: 'Previsão IA', icon: FiTrendingUp, path: '/previsao', badge: 'LIVE' },
     { id: 'movimentacao', label: 'Entrada/Saída', icon: FiRepeat, path: '/movimentacao' },
     { id: 'fornecedores', label: 'Fornecedores', icon: FiTruck, path: '/fornecedores' },
     { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/configuracoes' },
@@ -67,6 +67,11 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
                       isActive ? 'text-amber-500' : 'text-gray-400 group-hover:text-gray-200'
                     }`} />
                     <span>{item.label}</span>
+                    {item.badge && (
+                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 tracking-wider">
+                        {item.badge}
+                      </span>
+                    )}
                   </div>
 
                   {isActive && (
