@@ -1,5 +1,66 @@
 @import "tailwindcss";
 
+@theme {
+  --font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Tokens de cor da dashboard (tema escuro é o padrão do layout) */
+.dash {
+  --d-bg: #0b0c0e;
+  --d-surface: #141518;
+  --d-border: #25272c;
+  --d-text: #f3f4f6;
+  --d-muted: #9ca3af;
+  --d-faint: #5f636b;
+  --d-grid: #23252a;
+
+  --d-red: #ef4444;
+  --d-red-bg: #220e10;
+  --d-red-border: #6b1d1f;
+  --d-amber: #eaa21c;
+  --d-amber-bg: #231a07;
+  --d-amber-border: #74540f;
+  --d-teal: #2dd4bf;
+  --d-teal-bg: #0c1f1b;
+  --d-teal-border: #1d4d43;
+  --d-green: #22c55e;
+  --d-green-bg: #0f2a18;
+  --d-orange: #f07c2c;
+
+  --d-comb: #e0a030;
+  --d-ev: #3b8fd9;
+  --d-moto: #9ca3af;
+}
+
+.dash.dash-light {
+  --d-bg: #f7f5f0;
+  --d-surface: #ffffff;
+  --d-border: #e5dfd4;
+  --d-text: #1c1d1f;
+  --d-muted: #5f5850;
+  --d-faint: #a89e90;
+  --d-grid: #ece7de;
+
+  --d-red: #dc2626;
+  --d-red-bg: #fdf1f1;
+  --d-red-border: #f3c4c4;
+  --d-amber: #b7790b;
+  --d-amber-bg: #fdf7ea;
+  --d-amber-border: #edd49c;
+  --d-teal: #0f9a88;
+  --d-teal-bg: #eefaf7;
+  --d-teal-border: #b5e3d9;
+  --d-green: #15803d;
+  --d-green-bg: #e3f5e9;
+  --d-orange: #c8672b;
+
+  --d-comb: #c98a17;
+  --d-ev: #2a74bd;
+  --d-moto: #7b818b;
+}
+
 @layer base {
   body {
     margin: 0;

@@ -29,12 +29,12 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
       {/* Top Header */}
       <div>
         <div className="flex items-center gap-3 px-6 py-6 border-b border-[#1b222d]/60">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white shadow-md shadow-amber-900/30">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#f07c2c] to-[#c8572b] flex items-center justify-center text-white shadow-md shadow-orange-900/30">
             <RiShieldFlashFill className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-white text-base tracking-tight leading-none">AutoStock</h1>
-            <span className="text-[10px] text-amber-500/80 font-mono tracking-widest uppercase block mt-1">
+            <h1 className="font-display font-bold text-white text-lg tracking-wide leading-none">AutoStock</h1>
+            <span className="text-[9px] text-gray-500 font-mono tracking-[0.2em] uppercase block mt-1">
               Distribuidor Pro
             </span>
           </div>
@@ -58,19 +58,19 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
                   onClick={() => item.path && navigate(item.path)}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all group ${
                     isActive
-                      ? 'bg-[#1e1b18] text-amber-400 shadow-sm'
+                      ? 'bg-[#2a1b10] text-[#f07c2c] shadow-sm'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b22]'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <Icon className={`w-4 h-4 transition-colors ${
-                      isActive ? 'text-amber-500' : 'text-gray-400 group-hover:text-gray-200'
+                      isActive ? 'text-[#f07c2c]' : 'text-gray-400 group-hover:text-gray-200'
                     }`} />
                     <span>{item.label}</span>
                   </div>
 
                   {isActive && (
-                    <span className="w-1.5 h-5 bg-amber-500 rounded-full" />
+                    <span className="w-1 h-4 bg-[#f07c2c] rounded-full" />
                   )}
                 </button>
               );

@@ -1,12 +1,14 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+import DashboardPage from "./pages/private/dashboard";
 import EstoquePage from "./pages/private/estoque";
 import MovimentacoesPage from "./pages/private/movimentacoes";
 
 export default function Router() {
   return (
     <Routes>
-      <Route path="/" element={<EstoquePage />} />
+      <Route path="/" element={<DashboardPage />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/pecas" element={<EstoquePage />} />
       <Route path="/estoque" element={<EstoquePage />} />
       <Route path="/movimentacao" element={<MovimentacoesPage />} />
