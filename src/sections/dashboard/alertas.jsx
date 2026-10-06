@@ -23,13 +23,14 @@ const ESTILOS = {
 };
 
 // Seção de alertas: mostra as peças mais perto de acabar
-export default function AlertasPreditivos({ t, pecas = [], movimentacoes = [] }) {
+export default function AlertasPreditivos({ t, pecas = [], movimentacoes = [], agora }) {
   const navigate = useNavigate();
   const [fechados, setFechados] = useState([]);
 
   const alertas = useMemo(() => {
     // Saídas dos últimos 30 dias por peça, para estimar em quantos dias acaba
-    const limite = Date.now() - 30 * 86400000;
+    // "agora" = horário da última sincronização (vem da página)
+    const limite = (agora ? agora.getTime() : 0) - 30 * 86400000;
     const saidasPorPeca = {};
     movimentacoes.forEach((m) => {
       if (m.tipo === 'saida' && new Date(m.dataHora).getTime() >= limite) {
@@ -58,7 +59,7 @@ export default function AlertasPreditivos({ t, pecas = [], movimentacoes = [] })
       .sort((a, b) => a.nivel - b.nivel)
       .filter((a) => !fechados.includes(a.id))
       .slice(0, 3);
-  }, [pecas, movimentacoes, fechados]);
+  }, [pecas, movimentacoes, fechados, agora]);
 
   return (
     <>

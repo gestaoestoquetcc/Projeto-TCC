@@ -1,14 +1,15 @@
 import React, { useMemo } from 'react';
 
 // Seção de cards rápidos do Dashboard (indicadores do estoque)
-export default function CardsRapidos({ t, pecas = [], movimentacoes = [] }) {
+export default function CardsRapidos({ t, pecas = [], movimentacoes = [], agora }) {
   const indicadores = useMemo(() => {
     const totalEstoque = pecas.reduce((soma, p) => soma + p.quantidade, 0);
     const rupturas = pecas.filter((p) => p.status === 'critico').length;
     const atencao = pecas.filter((p) => p.status === 'atencao').length;
 
     // Giro do mês = unidades que saíram nos últimos 30 dias / unidades em estoque
-    const limite = Date.now() - 30 * 86400000;
+    // "agora" = horário da última sincronização (vem da página)
+    const limite = (agora ? agora.getTime() : 0) - 30 * 86400000;
     const saidas30d = movimentacoes
       .filter((m) => m.tipo === 'saida' && new Date(m.dataHora).getTime() >= limite)
       .reduce((soma, m) => soma + Number(m.quantidade || 0), 0);
@@ -48,7 +49,7 @@ export default function CardsRapidos({ t, pecas = [], movimentacoes = [] }) {
         badgeCor: atencao > 0 ? 'bg-amber-500/10 text-[#c9900c]' : 'bg-gray-500/10 text-gray-500',
       },
     ];
-  }, [pecas, movimentacoes, t]);
+  }, [pecas, movimentacoes, t, agora]);
 
   return (
     <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

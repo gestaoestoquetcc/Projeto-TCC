@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FiArrowDown,
   FiArrowUp,
@@ -128,33 +128,43 @@ export default function MovimentacoesPage() {
   const t = isDark ? TEMAS.escuro : TEMAS.claro;
   const aba = ABAS[activeTab];
 
-  // Carregar dados de peças e histórico
-  const carregarDados = useCallback(async () => {
-    try {
-      setLoading(true);
-      setErroCarregar('');
-      const [listaPecas, listaMovs] = await Promise.all([getPecas(), getMovimentacoes()]);
-      setPecas(listaPecas);
-      setMovimentacoes(listaMovs);
-    } catch (err) {
-      console.error('Erro ao carregar dados:', err);
-      setErroCarregar('Não foi possível carregar os dados do Supabase. Verifique sua conexão ou o arquivo .env.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // "versao" muda quando clica em Atualizar, e isso faz o useEffect buscar de novo
+  const [versao, setVersao] = useState(0);
 
+  // Busca peças e movimentações no Supabase
   useEffect(() => {
-    carregarDados();
-  }, [carregarDados]);
+    let ativo = true; // evita atualizar a tela se ela já foi fechada
+    Promise.all([getPecas(), getMovimentacoes()])
+      .then(([listaPecas, listaMovs]) => {
+        if (!ativo) return;
+        setPecas(listaPecas);
+        setMovimentacoes(listaMovs);
+        setErroCarregar('');
+      })
+      .catch((err) => {
+        console.error(err);
+        if (ativo) setErroCarregar('Não foi possível carregar os dados do Supabase. Verifique sua conexão ou o arquivo .env.');
+      })
+      .finally(() => {
+        if (ativo) setLoading(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [versao]);
 
-  // Atualizar documento padrão de acordo com a aba
-  useEffect(() => {
-    if (ABAS[activeTab].documentoPadrao) {
-      setDocumento(ABAS[activeTab].documentoPadrao);
-    }
+  // Botão de atualizar
+  const carregarDados = () => {
+    setLoading(true);
+    setVersao((v) => v + 1);
+  };
+
+  // Troca de aba: já ajusta o documento padrão e limpa o erro
+  const trocarAba = (id) => {
+    setActiveTab(id);
+    if (ABAS[id].documentoPadrao) setDocumento(ABAS[id].documentoPadrao);
     setMensagemErro('');
-  }, [activeTab]);
+  };
 
   // Mensagem de sucesso some sozinha depois de 4 segundos
   useEffect(() => {
@@ -223,7 +233,7 @@ export default function MovimentacoesPage() {
 
   // Na aba Pedidos: ao clicar em "Receber", vai para Recebimento já preenchido
   const handleReceberPedido = (p) => {
-    setActiveTab('recebimento');
+    trocarAba('recebimento');
     setPecaSelecionada(p);
     setSkuBusca(p.codigo);
     setQuantidade(p.sugestao);
@@ -337,7 +347,7 @@ export default function MovimentacoesPage() {
               <button
                 key={id}
                 type="button"
-                onClick={() => setActiveTab(id)}
+                onClick={() => trocarAba(id)}
                 className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all border ${
                   activeTab === id ? `${item.ativa} shadow-xs` : `border-transparent ${t.abaInativa}`
                 }`}

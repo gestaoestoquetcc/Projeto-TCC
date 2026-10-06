@@ -190,21 +190,97 @@ export function montarResumoParaIA(previsoes) {
 }
 
 /**
+ * Plano B: escreve a análise aqui mesmo, usando os números da previsão.
+ * É usado quando a IA externa ainda não foi configurada ou não respondeu.
+ */
+export function gerarAnaliseLocal(previsoes) {
+  if (previsoes.length === 0) return 'Nenhuma peça cadastrada para analisar.';
+
+  const linhas = [];
+
+  // 1) O que comprar primeiro (risco alto ou médio com compra sugerida)
+  const urgentes = previsoes
+    .filter((p) => p.compraSugerida > 0 && p.risco !== 'baixo')
+    .slice(0, 3);
+
+  linhas.push('Comprar primeiro:');
+  if (urgentes.length === 0) {
+    linhas.push('- Nenhuma compra urgente. Todas as peças têm estoque para os próximos dias.');
+  } else {
+    urgentes.forEach((p) => {
+      let motivo;
+      if (p.quantidade <= p.pontoReposicao) {
+        motivo = `Já está abaixo do mínimo (${p.quantidade} de ${p.pontoReposicao} un.)`;
+      } else if (p.diasAteRuptura !== null) {
+        motivo = `O estoque de ${p.quantidade} un. acaba em ~${p.diasAteRuptura} ${p.diasAteRuptura === 1 ? 'dia' : 'dias'}`;
+      } else {
+        motivo = `O estoque de ${p.quantidade} un. está perto do mínimo`;
+      }
+      linhas.push(`- ${p.nome} (${p.codigo}): comprar +${p.compraSugerida} un. ${motivo}.`);
+    });
+  }
+
+  // 2) Peças com tendência de alta
+  const emAlta = previsoes
+    .filter((p) => p.tendencia === 'subindo')
+    .sort((a, b) => b.variacaoPercentual - a.variacaoPercentual)
+    .slice(0, 3);
+
+  linhas.push('');
+  linhas.push('Em alta:');
+  if (emAlta.length === 0) {
+    linhas.push('- Nenhuma peça com demanda subindo de forma relevante.');
+  } else {
+    emAlta.forEach((p) => {
+      linhas.push(`- ${p.nome} (${p.codigo}): demanda +${p.variacaoPercentual}% em relação à média recente.`);
+    });
+  }
+
+  // 3) Recomendação geral
+  const altos = previsoes.filter((p) => p.risco === 'alto').length;
+  const totalCompra = previsoes.reduce((s, p) => s + p.compraSugerida, 0);
+  const semHistorico = previsoes.filter((p) => p.totalHistorico === 0).length;
+
+  linhas.push('');
+  linhas.push('Recomendação:');
+  if (altos > 0) {
+    linhas.push(
+      `- Priorize ${altos === 1 ? 'a peça' : `as ${altos} peças`} de risco alto esta semana. ` +
+        `No total, a sugestão é comprar ${totalCompra} unidades para cobrir os próximos ${DIAS_PREVISAO} dias.`
+    );
+  } else if (totalCompra > 0) {
+    linhas.push(`- Sem urgências. Planeje a compra de ${totalCompra} unidades para os próximos ${DIAS_PREVISAO} dias.`);
+  } else {
+    linhas.push('- Estoque saudável. Continue acompanhando as saídas semanalmente.');
+  }
+  if (semHistorico > 0) {
+    linhas.push(`- ${semHistorico} ${semHistorico === 1 ? 'peça não tem' : 'peças não têm'} saídas recentes, então a previsão delas é menos confiável.`);
+  }
+
+  return linhas.join('\n');
+}
+
+/**
  * Pede para a IA externa escrever uma análise.
  * A chamada passa pela Edge Function "analise-ia" do Supabase,
  * que guarda a chave da API em segredo (ela NUNCA fica no front-end).
+ *
+ * Se a IA externa não estiver configurada ou der erro, usamos o plano B
+ * (gerarAnaliseLocal), para o botão sempre funcionar.
  */
 export async function pedirAnaliseIA(previsoes) {
-  const { data, error } = await supabase.functions.invoke('analise-ia', {
-    body: { pecas: montarResumoParaIA(previsoes) },
-  });
+  try {
+    const { data, error } = await supabase.functions.invoke('analise-ia', {
+      body: { pecas: montarResumoParaIA(previsoes) },
+    });
 
-  if (error) {
-    console.error('Erro ao chamar a IA:', error);
-    throw new Error(
-      'Não foi possível falar com a IA. Verifique se a função "analise-ia" foi publicada no Supabase e se a chave da API foi configurada.'
-    );
+    if (error || !data?.analise) {
+      throw error || new Error(data?.erro || 'Resposta vazia da IA');
+    }
+
+    return data.analise;
+  } catch (err) {
+    console.warn('IA externa indisponível, usando análise automática:', err);
+    return `⚙ Análise automática (IA externa não configurada)\n\n${gerarAnaliseLocal(previsoes)}`;
   }
-
-  return data?.analise || 'A IA não retornou nenhuma análise.';
 }

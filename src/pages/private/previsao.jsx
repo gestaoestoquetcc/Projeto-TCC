@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FiRefreshCw,
@@ -75,24 +75,36 @@ export default function PrevisaoPage() {
 
   const t = isDark ? TEMAS.escuro : TEMAS.claro;
 
-  const carregarDados = useCallback(async () => {
-    try {
-      setLoading(true);
-      setErro('');
-      const [listaPecas, listaMovs] = await Promise.all([getPecas(), getMovimentacoes()]);
-      setPecas(listaPecas);
-      setMovimentacoes(listaMovs);
-    } catch (err) {
-      console.error('Erro ao carregar previsão:', err);
-      setErro('Não foi possível carregar os dados do Supabase. Verifique sua conexão ou o arquivo .env.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // "versao" muda quando clica em Atualizar, e isso faz o useEffect buscar de novo
+  const [versao, setVersao] = useState(0);
 
+  // Busca peças e movimentações no Supabase
   useEffect(() => {
-    carregarDados();
-  }, [carregarDados]);
+    let ativo = true; // evita atualizar a tela se ela já foi fechada
+    Promise.all([getPecas(), getMovimentacoes()])
+      .then(([listaPecas, listaMovs]) => {
+        if (!ativo) return;
+        setPecas(listaPecas);
+        setMovimentacoes(listaMovs);
+        setErro('');
+      })
+      .catch((err) => {
+        console.error(err);
+        if (ativo) setErro('Não foi possível carregar os dados do Supabase. Verifique sua conexão ou o arquivo .env.');
+      })
+      .finally(() => {
+        if (ativo) setLoading(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [versao]);
+
+  // Botão de atualizar
+  const carregarDados = () => {
+    setLoading(true);
+    setVersao((v) => v + 1);
+  };
 
   // Cálculo da previsão (roda de novo sempre que os dados mudam)
   const previsoes = useMemo(() => preverTodas(pecas, movimentacoes), [pecas, movimentacoes]);
@@ -413,7 +425,7 @@ function GraficoPrevisao({ t, serie }) {
       {[0, 1, 2, 3, 4].map((i) => (
         <g key={i}>
           <line x1={M.esquerda} x2={L - M.direita} y1={y(passo * i)} y2={y(passo * i)} stroke={t.grade} strokeDasharray="3 4" />
-          <text x={M.esquerda - 8} y={y(passo * i) + 4} textAnchor="end" fontSize="10" fontFamily="monospace" fill="#9a9a9a">
+          <text x={M.esquerda - 8} y={y(passo * i) + 4} textAnchor="end" fontSize="14" fontFamily="monospace" fill="#9a9a9a">
             {passo * i}
           </text>
         </g>
@@ -424,14 +436,14 @@ function GraficoPrevisao({ t, serie }) {
           x={x(i)}
           y={A - 8}
           textAnchor={i === 0 ? 'start' : i === rotulos.length - 1 ? 'end' : 'middle'}
-          fontSize="10"
+          fontSize="14"
           fontFamily="monospace"
           fill={i > ultimoReal ? '#1e6fbe' : '#9a9a9a'}
         >
           {r}
         </text>
       ))}
-      <text x={x(ultimoReal) + 6} y={M.topo + 12} fontSize="10" fontFamily="monospace" fill="#1e6fbe">
+      <text x={x(ultimoReal) + 6} y={M.topo + 12} fontSize="14" fontFamily="monospace" fill="#1e6fbe">
         previsão →
       </text>
       <path d={linhaReal} fill="none" stroke="#c8672b" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />

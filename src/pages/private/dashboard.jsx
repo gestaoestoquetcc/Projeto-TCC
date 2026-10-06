@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiRefreshCw, FiLoader, FiAlertCircle } from 'react-icons/fi';
 
 import Sidebar from '@components/layout/Sidebar';
@@ -55,26 +55,37 @@ export default function DashboardPage() {
 
   const t = isDark ? TEMAS.escuro : TEMAS.claro;
 
-  // Busca peças e movimentações no Supabase
-  const carregarDados = useCallback(async () => {
-    try {
-      setLoading(true);
-      setErro('');
-      const [listaPecas, listaMovs] = await Promise.all([getPecas(), getMovimentacoes()]);
-      setPecas(listaPecas);
-      setMovimentacoes(listaMovs);
-      setUltimaSync(new Date());
-    } catch (err) {
-      console.error('Erro ao carregar dashboard:', err);
-      setErro('Não foi possível carregar os dados do Supabase. Verifique sua conexão ou o arquivo .env.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // "versao" muda quando clica em Atualizar, e isso faz o useEffect buscar de novo
+  const [versao, setVersao] = useState(0);
 
+  // Busca peças e movimentações no Supabase
   useEffect(() => {
-    carregarDados();
-  }, [carregarDados]);
+    let ativo = true; // evita atualizar a tela se ela já foi fechada
+    Promise.all([getPecas(), getMovimentacoes()])
+      .then(([listaPecas, listaMovs]) => {
+        if (!ativo) return;
+        setPecas(listaPecas);
+        setMovimentacoes(listaMovs);
+        setUltimaSync(new Date());
+        setErro('');
+      })
+      .catch((err) => {
+        console.error(err);
+        if (ativo) setErro('Não foi possível carregar os dados do Supabase. Verifique sua conexão ou o arquivo .env.');
+      })
+      .finally(() => {
+        if (ativo) setLoading(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [versao]);
+
+  // Botão de atualizar
+  const carregarDados = () => {
+    setLoading(true);
+    setVersao((v) => v + 1);
+  };
 
   return (
     <div className={`flex min-h-screen ${t.pagina}`}>
@@ -129,8 +140,8 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            <CardsRapidos t={t} pecas={pecas} movimentacoes={movimentacoes} />
-            <AlertasPreditivos t={t} pecas={pecas} movimentacoes={movimentacoes} />
+            <CardsRapidos t={t} pecas={pecas} movimentacoes={movimentacoes} agora={ultimaSync} />
+            <AlertasPreditivos t={t} pecas={pecas} movimentacoes={movimentacoes} agora={ultimaSync} />
             <Graficos t={t} pecas={pecas} movimentacoes={movimentacoes} />
           </>
         )}
