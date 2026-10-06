@@ -190,83 +190,77 @@ export function montarResumoParaIA(previsoes) {
 }
 
 /**
- * Plano B: escreve a análise aqui mesmo, usando os números da previsão.
- * É usado quando a IA externa ainda não foi configurada ou não respondeu.
+ * Plano B: monta a análise aqui mesmo, usando os números da previsão.
+ * Devolve os dados ORGANIZADOS (não só texto), para a tela mostrar em cards.
  */
 export function gerarAnaliseLocal(previsoes) {
-  if (previsoes.length === 0) return 'Nenhuma peça cadastrada para analisar.';
-
-  const linhas = [];
-
-  // 1) O que comprar primeiro (risco alto ou médio com compra sugerida)
+  // 1) Prioridade de compra: risco alto/médio com compra sugerida (até 3)
   const urgentes = previsoes
     .filter((p) => p.compraSugerida > 0 && p.risco !== 'baixo')
-    .slice(0, 3);
-
-  linhas.push('Comprar primeiro:');
-  if (urgentes.length === 0) {
-    linhas.push('- Nenhuma compra urgente. Todas as peças têm estoque para os próximos dias.');
-  } else {
-    urgentes.forEach((p) => {
+    .slice(0, 3)
+    .map((p) => {
       let motivo;
+      let tipoMotivo;
       if (p.quantidade <= p.pontoReposicao) {
-        motivo = `Já está abaixo do mínimo (${p.quantidade} de ${p.pontoReposicao} un.)`;
+        motivo = p.quantidade === 0 ? 'Sem estoque' : 'Abaixo do mínimo';
+        tipoMotivo = 'critico';
       } else if (p.diasAteRuptura !== null) {
-        motivo = `O estoque de ${p.quantidade} un. acaba em ~${p.diasAteRuptura} ${p.diasAteRuptura === 1 ? 'dia' : 'dias'}`;
+        motivo = `Acaba em ~${p.diasAteRuptura} ${p.diasAteRuptura === 1 ? 'dia' : 'dias'}`;
+        tipoMotivo = 'prazo';
       } else {
-        motivo = `O estoque de ${p.quantidade} un. está perto do mínimo`;
+        motivo = 'Perto do mínimo';
+        tipoMotivo = 'prazo';
       }
-      linhas.push(`- ${p.nome} (${p.codigo}): comprar +${p.compraSugerida} un. ${motivo}.`);
+      return {
+        id: p.id,
+        nome: p.nome,
+        codigo: p.codigo,
+        compra: p.compraSugerida,
+        quantidade: p.quantidade,
+        minimo: p.pontoReposicao,
+        risco: p.risco,
+        motivo,
+        tipoMotivo,
+      };
     });
-  }
 
-  // 2) Peças com tendência de alta
+  // 2) Peças com demanda subindo (até 4)
   const emAlta = previsoes
     .filter((p) => p.tendencia === 'subindo')
     .sort((a, b) => b.variacaoPercentual - a.variacaoPercentual)
-    .slice(0, 3);
-
-  linhas.push('');
-  linhas.push('Em alta:');
-  if (emAlta.length === 0) {
-    linhas.push('- Nenhuma peça com demanda subindo de forma relevante.');
-  } else {
-    emAlta.forEach((p) => {
-      linhas.push(`- ${p.nome} (${p.codigo}): demanda +${p.variacaoPercentual}% em relação à média recente.`);
-    });
-  }
+    .slice(0, 4)
+    .map((p) => ({ id: p.id, nome: p.nome, codigo: p.codigo, variacao: p.variacaoPercentual }));
 
   // 3) Recomendação geral
   const altos = previsoes.filter((p) => p.risco === 'alto').length;
   const totalCompra = previsoes.reduce((s, p) => s + p.compraSugerida, 0);
   const semHistorico = previsoes.filter((p) => p.totalHistorico === 0).length;
 
-  linhas.push('');
-  linhas.push('Recomendação:');
-  if (altos > 0) {
-    linhas.push(
-      `- Priorize ${altos === 1 ? 'a peça' : `as ${altos} peças`} de risco alto esta semana. ` +
-        `No total, a sugestão é comprar ${totalCompra} unidades para cobrir os próximos ${DIAS_PREVISAO} dias.`
-    );
+  let recomendacao;
+  if (previsoes.length === 0) {
+    recomendacao = 'Nenhuma peça cadastrada para analisar.';
+  } else if (altos > 0) {
+    recomendacao = `Priorize ${altos === 1 ? 'a peça' : `as ${altos} peças`} de risco alto esta semana. No total, compre ${totalCompra} ${totalCompra === 1 ? 'unidade' : 'unidades'} para cobrir os próximos ${DIAS_PREVISAO} dias.`;
   } else if (totalCompra > 0) {
-    linhas.push(`- Sem urgências. Planeje a compra de ${totalCompra} unidades para os próximos ${DIAS_PREVISAO} dias.`);
+    recomendacao = `Sem urgências. Planeje a compra de ${totalCompra} unidades para os próximos ${DIAS_PREVISAO} dias.`;
   } else {
-    linhas.push('- Estoque saudável. Continue acompanhando as saídas semanalmente.');
-  }
-  if (semHistorico > 0) {
-    linhas.push(`- ${semHistorico} ${semHistorico === 1 ? 'peça não tem' : 'peças não têm'} saídas recentes, então a previsão delas é menos confiável.`);
+    recomendacao = 'Estoque saudável. Continue acompanhando as saídas semanalmente.';
   }
 
-  return linhas.join('\n');
+  const observacao =
+    semHistorico > 0
+      ? `${semHistorico} ${semHistorico === 1 ? 'peça não tem' : 'peças não têm'} saídas recentes. A previsão delas é menos confiável.`
+      : null;
+
+  return { urgentes, emAlta, recomendacao, observacao, totalCompra, altos };
 }
 
 /**
- * Pede para a IA externa escrever uma análise.
- * A chamada passa pela Edge Function "analise-ia" do Supabase,
- * que guarda a chave da API em segredo (ela NUNCA fica no front-end).
+ * Pede a análise.
+ * 1º tenta a IA externa (Edge Function "analise-ia" do Supabase, que guarda a chave em segredo).
+ * Se ela não estiver configurada ou der erro, usa o plano B (gerarAnaliseLocal).
  *
- * Se a IA externa não estiver configurada ou der erro, usamos o plano B
- * (gerarAnaliseLocal), para o botão sempre funcionar.
+ * Devolve: { origem: 'ia' | 'local', texto?, dados?, geradoEm }
  */
 export async function pedirAnaliseIA(previsoes) {
   try {
@@ -278,9 +272,9 @@ export async function pedirAnaliseIA(previsoes) {
       throw error || new Error(data?.erro || 'Resposta vazia da IA');
     }
 
-    return data.analise;
+    return { origem: 'ia', texto: data.analise, dados: gerarAnaliseLocal(previsoes), geradoEm: new Date() };
   } catch (err) {
     console.warn('IA externa indisponível, usando análise automática:', err);
-    return `⚙ Análise automática (IA externa não configurada)\n\n${gerarAnaliseLocal(previsoes)}`;
+    return { origem: 'local', dados: gerarAnaliseLocal(previsoes), geradoEm: new Date() };
   }
 }

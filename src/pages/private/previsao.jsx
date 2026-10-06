@@ -7,12 +7,12 @@ import {
   FiTrendingUp,
   FiTrendingDown,
   FiMinus,
-  FiCpu,
   FiShoppingCart,
   FiInfo,
 } from 'react-icons/fi';
 
 import Sidebar from '@components/layout/Sidebar';
+import PainelAnalise from '@components/previsao/PainelAnalise';
 import { getPecas } from '../../services/pecasService';
 import { getMovimentacoes } from '../../services/movimentacoesService';
 import {
@@ -69,7 +69,7 @@ export default function PrevisaoPage() {
   const [filtroRisco, setFiltroRisco] = useState('todos');
 
   // Estado da análise da IA
-  const [analise, setAnalise] = useState('');
+  const [analise, setAnalise] = useState(null); // { origem, dados, texto?, geradoEm }
   const [carregandoIA, setCarregandoIA] = useState(false);
   const [erroIA, setErroIA] = useState('');
 
@@ -128,8 +128,8 @@ export default function PrevisaoPage() {
     try {
       setCarregandoIA(true);
       setErroIA('');
-      const texto = await pedirAnaliseIA(previsoes);
-      setAnalise(texto);
+      const resultado = await pedirAnaliseIA(previsoes);
+      setAnalise(resultado);
     } catch (err) {
       setErroIA(err.message);
     } finally {
@@ -206,43 +206,17 @@ export default function PrevisaoPage() {
               </section>
 
               {/* Painel da IA */}
-              <section className={`xl:col-span-5 border rounded-xl p-6 shadow-xs flex flex-col ${t.card}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <FiCpu className="w-4 h-4 text-[#c8672b]" />
-                  <span className={`text-[11px] font-mono tracking-widest uppercase ${t.textoSuave}`}>Análise da IA</span>
-                </div>
-                <p className={`text-xs mb-4 ${t.textoSuave}`}>
-                  A IA lê as previsões acima e explica, em texto, o que comprar primeiro e por quê.
-                </p>
-
-                {analise ? (
-                  <div className={`text-sm leading-relaxed whitespace-pre-line flex-1 overflow-y-auto max-h-[300px] pr-1 ${t.textoForte}`}>
-                    {analise}
-                  </div>
-                ) : (
-                  <div className={`flex-1 flex flex-col items-center justify-center text-center py-8 ${t.textoFraco}`}>
-                    <FiCpu className="w-8 h-8 mb-2 opacity-60" />
-                    <p className="text-xs">Clique no botão para gerar uma análise.</p>
-                  </div>
-                )}
-
-                {erroIA && (
-                  <div className="mt-3 p-2.5 bg-red-50 border border-red-200 text-red-800 text-[11px] rounded-lg flex gap-2">
-                    <FiAlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                    <span>{erroIA}</span>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handlePedirAnalise}
-                  disabled={carregandoIA || previsoes.length === 0}
-                  className="mt-4 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[#c8672b] hover:bg-[#b85b20] text-white text-sm font-bold disabled:opacity-60"
-                >
-                  {carregandoIA ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiCpu className="w-4 h-4" />}
-                  {carregandoIA ? 'A IA está analisando...' : analise ? 'Gerar nova análise' : 'Pedir análise à IA'}
-                </button>
-              </section>
+              <div className="xl:col-span-5 flex flex-col">
+                <PainelAnalise
+                  t={t}
+                  analise={analise}
+                  carregando={carregandoIA}
+                  erro={erroIA}
+                  onGerar={handlePedirAnalise}
+                  desabilitado={previsoes.length === 0}
+                  onComprar={() => navigate('/movimentacao')}
+                />
+              </div>
             </div>
 
             {/* Tabela de previsão por peça */}
