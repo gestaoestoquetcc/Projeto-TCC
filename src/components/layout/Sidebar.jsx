@@ -8,12 +8,23 @@ import {
   FiTruck, 
   FiSettings, 
   FiSun,
-  FiMoon
+  FiMoon,
+  FiLogOut
 } from 'react-icons/fi';
 import { RiShieldFlashFill } from 'react-icons/ri';
+import { useAuth } from '../../contexts/AuthContext';
+
+const NOME_CARGO = { admin: 'Administrador', funcionario: 'Funcionário' };
+
+// "Kelvin Torres" -> "KT"
+function iniciais(nome = '') {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  return ((partes[0]?.[0] || '') + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase() || '?';
+}
 
 export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleDark }) {
   const navigate = useNavigate();
+  const { usuario, sair } = useAuth();
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: FiGrid, path: '/' },
@@ -107,15 +118,24 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
           </button>
         </div>
 
-        {/* User Card */}
+        {/* User Card (usuário logado) */}
         <div className="flex items-center gap-3 p-2 rounded-lg bg-[#161b22]/70 border border-[#21262d]/50">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center text-white font-semibold text-xs tracking-wider shadow-sm">
-            AT
+          <div className="w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center text-white font-semibold text-xs tracking-wider shadow-sm">
+            {iniciais(usuario?.nome)}
           </div>
-          <div className="overflow-hidden">
-            <h4 className="text-xs font-semibold text-gray-200 truncate">Arthur Teste</h4>
-            <p className="text-[11px] text-gray-500 truncate">Gerente de Estoque</p>
+          <div className="overflow-hidden flex-1">
+            <h4 className="text-xs font-semibold text-gray-200 truncate" title={usuario?.email}>{usuario?.nome}</h4>
+            <p className="text-[11px] text-gray-500 truncate">{NOME_CARGO[usuario?.cargo] || 'Funcionário'}</p>
           </div>
+          <button
+            type="button"
+            onClick={sair}
+            title="Sair"
+            aria-label="Sair do sistema"
+            className="w-8 h-8 shrink-0 rounded-md flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            <FiLogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </aside>
