@@ -102,13 +102,23 @@ export default function PainelOrcamento({ t, pecas = [], onEstoqueAlterado }) {
   const [processando, setProcessando] = useState(null);
 
   const [mensagem, setMensagem] = useState(null); // { tipo: 'sucesso' | 'erro', texto }
+  const [tabelasFaltando, setTabelasFaltando] = useState(false); // banco ainda sem as tabelas de orçamento
 
   // Carrega a lista
   useEffect(() => {
     let ativo = true;
     listarOrcamentos()
-      .then((lista) => ativo && setOrcamentos(lista))
-      .catch((err) => ativo && setMensagem({ tipo: 'erro', texto: err.message }))
+      .then((lista) => {
+        if (!ativo) return;
+        setOrcamentos(lista);
+        setTabelasFaltando(false);
+      })
+      .catch((err) => {
+        if (!ativo) return;
+        // Tabelas faltando: mostra o aviso fixo em vez da mensagem que some sozinha
+        if (err.tabelasFaltando) setTabelasFaltando(true);
+        else setMensagem({ tipo: 'erro', texto: err.message });
+      })
       .finally(() => ativo && setCarregandoLista(false));
     return () => {
       ativo = false;
@@ -205,7 +215,8 @@ export default function PainelOrcamento({ t, pecas = [], onEstoqueAlterado }) {
       setMensagem({ tipo: 'sucesso', texto: `Orçamento ${novo.numero} salvo para ${novo.cliente} (${real(novo.total)}).` });
       limpar();
     } catch (err) {
-      setMensagem({ tipo: 'erro', texto: err.message });
+      if (err.tabelasFaltando) setTabelasFaltando(true);
+      else setMensagem({ tipo: 'erro', texto: err.message });
     } finally {
       setSalvando(false);
     }
@@ -253,6 +264,28 @@ export default function PainelOrcamento({ t, pecas = [], onEstoqueAlterado }) {
 
   return (
     <div className="space-y-4">
+      {/* Aviso fixo enquanto o banco não tiver as tabelas de orçamento */}
+      {tabelasFaltando && (
+        <div className="p-4 border border-amber-300 bg-amber-50 text-amber-900 rounded-xl flex flex-col sm:flex-row sm:items-center gap-3">
+          <FiAlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div className="text-xs leading-relaxed flex-1">
+            <strong className="block text-sm mb-0.5">Orçamentos ainda não estão ativados no banco de dados</strong>
+            Você pode montar e imprimir orçamentos, mas para <strong>salvar</strong> falta criar as tabelas no Supabase.
+            Quem é dono do projeto deve abrir o <strong>SQL Editor</strong>, colar o arquivo{' '}
+            <code className="px-1 py-0.5 rounded bg-amber-100 font-mono">supabase/orcamentos.sql</code> e clicar em <strong>Run</strong>.
+          </div>
+          <button
+            type="button"
+            onClick={recarregarLista}
+            disabled={carregandoLista}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold disabled:opacity-60"
+          >
+            {carregandoLista ? <FiLoader className="w-3.5 h-3.5 animate-spin" /> : <FiCheck className="w-3.5 h-3.5" />}
+            Verificar de novo
+          </button>
+        </div>
+      )}
+
       {mensagem && (
         <div
           className={`p-3 border text-xs rounded-xl flex items-center gap-2 ${
@@ -487,7 +520,8 @@ export default function PainelOrcamento({ t, pecas = [], onEstoqueAlterado }) {
             <button
               type="button"
               onClick={handleSalvar}
-              disabled={itens.length === 0 || salvando}
+              disabled={itens.length === 0 || salvando || tabelasFaltando}
+              title={tabelasFaltando ? 'Falta criar as tabelas de orçamento no Supabase' : undefined}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#c8672b] hover:bg-[#b85b20] text-white text-sm font-bold shadow-xs disabled:opacity-40"
             >
               {salvando ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiSave className="w-4 h-4" />}
@@ -529,6 +563,12 @@ export default function PainelOrcamento({ t, pecas = [], onEstoqueAlterado }) {
             <div className={`py-14 flex flex-col items-center ${t.textoFraco}`}>
               <FiLoader className="w-6 h-6 animate-spin text-amber-600 mb-2" />
               <span className="text-xs">Carregando orçamentos...</span>
+            </div>
+          ) : tabelasFaltando ? (
+            <div className={`py-14 text-center ${t.textoFraco}`}>
+              <FiAlertTriangle className="w-7 h-7 mx-auto mb-2 text-amber-500" />
+              <p className="text-sm">Os orçamentos salvos aparecem aqui</p>
+              <p className="text-xs mt-1">depois que as tabelas forem criadas no Supabase.</p>
             </div>
           ) : listaFiltrada.length === 0 ? (
             <div className={`py-14 text-center ${t.textoFraco}`}>

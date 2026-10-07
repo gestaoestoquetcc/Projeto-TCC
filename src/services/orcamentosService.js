@@ -24,9 +24,11 @@ function tratarErro(error, acao) {
   console.error(`Erro ao ${acao}:`, error);
   const msg = error?.message || '';
   if (error?.code === '42P01' || error?.code === 'PGRST205' || msg.includes('orcamento')) {
-    return new Error(
+    const erro = new Error(
       'As tabelas de orçamento ainda não existem no Supabase. Rode o arquivo supabase/orcamentos.sql no SQL Editor do Supabase.'
     );
+    erro.tabelasFaltando = true; // a tela usa isso para mostrar o aviso fixo
+    return erro;
   }
   return new Error(`Não foi possível ${acao}. ${msg}`);
 }
