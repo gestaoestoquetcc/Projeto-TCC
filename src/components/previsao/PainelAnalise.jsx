@@ -65,7 +65,7 @@ export default function PainelAnalise({ t, analise, carregando, erro, onGerar, d
 
       {/* Botão */}
       <div className="px-6 pb-5 pt-3">
-        {analise ? (
+        {analise?.origem === 'ia' ? (
           <button
             type="button"
             onClick={onGerar}

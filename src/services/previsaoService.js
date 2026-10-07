@@ -15,7 +15,8 @@ import { supabase } from '../utils/SupaBase';
 
 const DIA = 86400000;
 export const DIAS_HISTORICO = 90; // quantos dias de histórico analisamos
-export const DIAS_PREVISAO = 30; // para quantos dias à frente prevemos
+export const DIAS_PREVISAO = 30; // horizonte padrão (dias à frente)
+export const HORIZONTES = [15, 30, 60]; // opções que a tela oferece
 
 // Data de hoje à meia-noite
 function hojeZerado() {
@@ -72,7 +73,7 @@ function desvioPadrao(valores) {
 /**
  * Calcula a previsão de UMA peça
  */
-export function preverPeca(peca, movimentacoes) {
+export function preverPeca(peca, movimentacoes, dias = DIAS_PREVISAO) {
   const historico = saidasPorDia(movimentacoes, peca.id, DIAS_HISTORICO);
   const ultimos30 = historico.slice(-30);
   const totalHistorico = historico.reduce((a, b) => a + b, 0);
@@ -83,11 +84,11 @@ export function preverPeca(peca, movimentacoes) {
 
   // 2) Tendência: quanto a demanda diária muda por dia (limitada para não exagerar)
   const tendenciaDia = inclinacao(historico);
-  const ajuste = Math.max(-0.5, Math.min(0.5, base > 0 ? (tendenciaDia * DIAS_PREVISAO) / 2 / base : 0));
+  const ajuste = Math.max(-0.5, Math.min(0.5, base > 0 ? (tendenciaDia * dias) / 2 / base : 0));
   const demandaDia = Math.max(0, base * (1 + ajuste));
 
   // 3) Demanda prevista para os próximos 30 dias
-  const demandaPrevista = Math.round(demandaDia * DIAS_PREVISAO);
+  const demandaPrevista = Math.round(demandaDia * dias);
 
   // 4) Quando acaba o estoque
   const diasAteRuptura = demandaDia > 0 ? Math.floor(peca.quantidade / demandaDia) : null;
@@ -131,10 +132,10 @@ export function preverPeca(peca, movimentacoes) {
 /**
  * Calcula a previsão de TODAS as peças, ordenadas da mais urgente para a menos
  */
-export function preverTodas(pecas, movimentacoes) {
+export function preverTodas(pecas, movimentacoes, dias = DIAS_PREVISAO) {
   const ordemRisco = { alto: 0, medio: 1, baixo: 2 };
   return pecas
-    .map((p) => preverPeca(p, movimentacoes))
+    .map((p) => preverPeca(p, movimentacoes, dias))
     .sort((a, b) => {
       if (ordemRisco[a.risco] !== ordemRisco[b.risco]) return ordemRisco[a.risco] - ordemRisco[b.risco];
       return (a.diasAteRuptura ?? 9999) - (b.diasAteRuptura ?? 9999);
@@ -144,9 +145,9 @@ export function preverTodas(pecas, movimentacoes) {
 /**
  * Série semanal para o gráfico: 8 semanas de histórico + 4 semanas previstas
  */
-export function serieSemanal(pecas, movimentacoes, previsoes) {
+export function serieSemanal(pecas, movimentacoes, previsoes, dias = DIAS_PREVISAO) {
   const semanasHistorico = 8;
-  const semanasPrevisao = 4;
+  const semanasPrevisao = Math.max(2, Math.ceil(dias / 7));
   const hoje = hojeZerado().getTime();
   const pecasIds = new Set(pecas.map((p) => p.id));
 
@@ -159,7 +160,7 @@ export function serieSemanal(pecas, movimentacoes, previsoes) {
   });
 
   const demandaSemana = previsoes.reduce((soma, p) => soma + p.demandaDia * 7, 0);
-  const previsto = new Array(semanasPrevisao).fill(Math.round(demandaSemana));
+  const previsto = new Array(semanasPrevisao).fill(Math.round(demandaSemana * 10) / 10); // 1 casa decimal: mostra até demandas pequenas
 
   const rotulos = [];
   for (let i = -semanasHistorico + 1; i <= semanasPrevisao; i++) {
@@ -167,7 +168,15 @@ export function serieSemanal(pecas, movimentacoes, previsoes) {
     rotulos.push(d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
   }
 
-  return { historico, previsto, rotulos };
+  const totalHistorico = historico.reduce((a, b) => a + b, 0);
+  return {
+    historico,
+    previsto,
+    rotulos,
+    totalHistorico,
+    mediaSemanal: Math.round((totalHistorico / semanasHistorico) * 10) / 10,
+    totalPrevisto: Math.round(demandaSemana * semanasPrevisao * 10) / 10,
+  };
 }
 
 /**
@@ -193,7 +202,7 @@ export function montarResumoParaIA(previsoes) {
  * Plano B: monta a análise aqui mesmo, usando os números da previsão.
  * Devolve os dados ORGANIZADOS (não só texto), para a tela mostrar em cards.
  */
-export function gerarAnaliseLocal(previsoes) {
+export function gerarAnaliseLocal(previsoes, dias = DIAS_PREVISAO) {
   // 1) Prioridade de compra: risco alto/médio com compra sugerida (até 3)
   const urgentes = previsoes
     .filter((p) => p.compraSugerida > 0 && p.risco !== 'baixo')
@@ -240,9 +249,9 @@ export function gerarAnaliseLocal(previsoes) {
   if (previsoes.length === 0) {
     recomendacao = 'Nenhuma peça cadastrada para analisar.';
   } else if (altos > 0) {
-    recomendacao = `Priorize ${altos === 1 ? 'a peça' : `as ${altos} peças`} de risco alto esta semana. No total, compre ${totalCompra} ${totalCompra === 1 ? 'unidade' : 'unidades'} para cobrir os próximos ${DIAS_PREVISAO} dias.`;
+    recomendacao = `Priorize ${altos === 1 ? 'a peça' : `as ${altos} peças`} de risco alto esta semana. No total, compre ${totalCompra} ${totalCompra === 1 ? 'unidade' : 'unidades'} para cobrir os próximos ${dias} dias.`;
   } else if (totalCompra > 0) {
-    recomendacao = `Sem urgências. Planeje a compra de ${totalCompra} unidades para os próximos ${DIAS_PREVISAO} dias.`;
+    recomendacao = `Sem urgências. Planeje a compra de ${totalCompra} unidades para os próximos ${dias} dias.`;
   } else {
     recomendacao = 'Estoque saudável. Continue acompanhando as saídas semanalmente.';
   }
@@ -262,7 +271,7 @@ export function gerarAnaliseLocal(previsoes) {
  *
  * Devolve: { origem: 'ia' | 'local', texto?, dados?, geradoEm }
  */
-export async function pedirAnaliseIA(previsoes) {
+export async function pedirAnaliseIA(previsoes, dias = DIAS_PREVISAO) {
   try {
     const { data, error } = await supabase.functions.invoke('analise-ia', {
       body: { pecas: montarResumoParaIA(previsoes) },
@@ -272,9 +281,9 @@ export async function pedirAnaliseIA(previsoes) {
       throw error || new Error(data?.erro || 'Resposta vazia da IA');
     }
 
-    return { origem: 'ia', texto: data.analise, dados: gerarAnaliseLocal(previsoes), geradoEm: new Date() };
+    return { origem: 'ia', texto: data.analise, dados: gerarAnaliseLocal(previsoes, dias), geradoEm: new Date() };
   } catch (err) {
     console.warn('IA externa indisponível, usando análise automática:', err);
-    return { origem: 'local', dados: gerarAnaliseLocal(previsoes), geradoEm: new Date() };
+    return { origem: 'local', dados: gerarAnaliseLocal(previsoes, dias), geradoEm: new Date() };
   }
 }

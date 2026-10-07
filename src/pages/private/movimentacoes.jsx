@@ -15,6 +15,7 @@ import {
 } from 'react-icons/fi';
 
 import Sidebar from '../../components/layout/Sidebar';
+import PainelOrcamento from '../../components/movimentacoes/PainelOrcamento';
 import { getPecas, calcularStatus } from '../../services/pecasService';
 import { getMovimentacoes, registrarMovimentacao } from '../../services/movimentacoesService';
 
@@ -38,7 +39,7 @@ const TEMAS = {
     dropdownItem: 'hover:bg-[#fcf5ec]',
     detalhe: 'bg-[#f8f6f1] border-[#ece7de]',
     linha: 'hover:bg-[#fcfbf9]',
-    divisor: 'divide-[#ece7dd]',
+    divisor: 'divide-[#ece7dd] border-[#ece7dd]',
     botaoAtualizar: 'text-gray-500 hover:text-amber-800 hover:bg-black/5',
     resumo: 'bg-[#fbf9f5] border-[#ece7de]',
   },
@@ -58,7 +59,7 @@ const TEMAS = {
     dropdownItem: 'hover:bg-[#262c38]',
     detalhe: 'bg-[#11151d] border-[#262c38]',
     linha: 'hover:bg-[#1e2430]',
-    divisor: 'divide-[#262c38]',
+    divisor: 'divide-[#262c38] border-[#262c38]',
     botaoAtualizar: 'text-gray-400 hover:text-amber-400 hover:bg-white/5',
     resumo: 'bg-[#11151d] border-[#262c38]',
   },
@@ -89,6 +90,10 @@ const ABAS = {
   pedidos: {
     label: 'Pedidos',
     ativa: 'bg-[#eef5fc] text-[#1e6fbe] border-[#bad7f5]',
+  },
+  orcamento: {
+    label: 'Orçamento',
+    ativa: 'bg-[#f5f0fc] text-[#7c3aed] border-[#ddd0f7]',
   },
 };
 
@@ -378,262 +383,267 @@ export default function MovimentacoesPage() {
         {mensagemSucesso && <Aviso tipo="sucesso" texto={mensagemSucesso} onFechar={() => setMensagemSucesso('')} />}
         {mensagemErro && <Aviso tipo="erro" texto={mensagemErro} onFechar={() => setMensagemErro('')} />}
 
-        {/* Main Grid: Form (ou Pedidos) à esquerda e Histórico à direita */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Card Esquerdo */}
-          <div className={`lg:col-span-5 border rounded-xl p-6 shadow-xs flex flex-col ${t.card}`}>
-            {activeTab === 'pedidos' ? (
-              <PainelPedidos t={t} pecas={pecasParaRepor} loading={loading} onReceber={handleReceberPedido} />
-            ) : (
-              <form onSubmit={handleConfirmar} className="flex flex-col gap-4 h-full">
-                <span className="text-[11px] font-mono tracking-widest text-[#a89e90] uppercase font-bold block">
-                  {aba.tituloForm}
-                </span>
+        {activeTab === 'orcamento' ? (
+          /* Aba Orçamento: monta, salva, imprime e aprova orçamentos */
+          <PainelOrcamento t={t} pecas={pecas} onEstoqueAlterado={carregarDados} />
+        ) : (
+          // Main Grid: Form (ou Pedidos) à esquerda e Histórico à direita
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Card Esquerdo */}
+            <div className={`lg:col-span-5 border rounded-xl p-6 shadow-xs flex flex-col ${t.card}`}>
+              {activeTab === 'pedidos' ? (
+                <PainelPedidos t={t} pecas={pecasParaRepor} loading={loading} onReceber={handleReceberPedido} />
+              ) : (
+                <form onSubmit={handleConfirmar} className="flex flex-col gap-4 h-full">
+                  <span className="text-[11px] font-mono tracking-widest text-[#a89e90] uppercase font-bold block">
+                    {aba.tituloForm}
+                  </span>
 
-                {/* SKU / Código OEM */}
-                <div className="relative">
-                  <Rotulo t={t}>SKU / Código OEM</Rotulo>
+                  {/* SKU / Código OEM */}
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={skuBusca}
-                      onChange={(e) => {
-                        setSkuBusca(e.target.value);
-                        setPecaSelecionada(null);
-                      }}
-                      placeholder="Ex: FRE-0142 ou nome da peça"
-                      autoComplete="off"
-                      className={`w-full px-3.5 py-2.5 pr-9 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-amber-600 focus:border-amber-600 transition-all font-mono ${t.input}`}
-                    />
-                    {skuBusca && (
+                    <Rotulo t={t}>SKU / Código OEM</Rotulo>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={skuBusca}
+                        onChange={(e) => {
+                          setSkuBusca(e.target.value);
+                          setPecaSelecionada(null);
+                        }}
+                        placeholder="Ex: FRE-0142 ou nome da peça"
+                        autoComplete="off"
+                        className={`w-full px-3.5 py-2.5 pr-9 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-amber-600 focus:border-amber-600 transition-all font-mono ${t.input}`}
+                      />
+                      {skuBusca && (
+                        <button
+                          type="button"
+                          onClick={limparFormulario}
+                          className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${t.textoFraco} hover:text-amber-600`}
+                          aria-label="Limpar"
+                        >
+                          <FiX className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Dropdown de sugestões */}
+                    {sugestoes.length > 0 && (
+                      <div className={`absolute left-0 right-0 top-full mt-1 border rounded-lg shadow-lg z-20 overflow-hidden divide-y ${t.dropdown}`}>
+                        {sugestoes.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handleSelectPeca(p)}
+                            className={`w-full text-left px-3.5 py-2 transition-colors flex items-center justify-between gap-3 ${t.dropdownItem}`}
+                          >
+                            <div className="min-w-0">
+                              <span className="font-bold text-xs text-[#b85824] block font-mono">{p.codigo}</span>
+                              <span className={`text-xs truncate block ${t.textoMedio}`}>{p.nome}</span>
+                            </div>
+                            <span className={`text-[11px] font-mono shrink-0 ${t.textoFraco}`}>{p.quantidade} un</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Mensagem quando nada é encontrado */}
+                    {skuBusca.trim() && !pecaSelecionada && sugestoes.length === 0 && !loading && (
+                      <p className={`mt-1.5 text-[11px] ${t.textoFraco}`}>Nenhuma peça encontrada com esse código ou nome.</p>
+                    )}
+
+                    {/* Detalhe da peça selecionada */}
+                    {pecaSelecionada && (
+                      <div className={`mt-2 p-3 rounded-lg border text-xs ${t.detalhe}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <span className={`font-semibold block ${t.textoForte}`}>{pecaSelecionada.nome}</span>
+                          <StatusBadge status={pecaSelecionada.status} />
+                        </div>
+                        <div className={`mt-2 grid grid-cols-3 gap-2 font-mono ${t.textoSuave}`}>
+                          <div>
+                            <span className="block text-[10px] uppercase tracking-wider">Atual</span>
+                            <strong className={t.textoForte}>{pecaSelecionada.quantidade} un</strong>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] uppercase tracking-wider">Mínimo</span>
+                            <strong className={t.textoForte}>{pecaSelecionada.pontoReposicao} un</strong>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] uppercase tracking-wider">Depois</span>
+                            <strong className={estoqueInsuficiente ? 'text-[#d33e3e]' : aba.tipo === 'saida' ? 'text-amber-600' : 'text-[#16a34a]'}>
+                              {estoqueDepois} un
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quantidade com Stepper */}
+                  <div>
+                    <Rotulo t={t}>Quantidade</Rotulo>
+                    <div className="flex items-center">
                       <button
                         type="button"
-                        onClick={limparFormulario}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${t.textoFraco} hover:text-amber-600`}
-                        aria-label="Limpar"
+                        onClick={handleDecrement}
+                        disabled={quantidade <= 1}
+                        className={`w-10 h-10 flex items-center justify-center rounded-l-lg border border-r-0 transition-colors disabled:opacity-40 ${t.stepper}`}
+                        aria-label="Diminuir"
                       >
-                        <FiX className="w-4 h-4" />
+                        <FiMinus className="w-4 h-4" />
                       </button>
+                      <input
+                        type="number"
+                        min="1"
+                        value={quantidade}
+                        onChange={(e) => setQuantidade(Math.max(1, Number(e.target.value) || 1))}
+                        className={`w-full h-10 text-center font-bold text-sm border-y focus:outline-none ${t.input} ${estoqueInsuficiente ? '!text-[#d33e3e]' : ''}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleIncrement}
+                        className={`w-10 h-10 flex items-center justify-center rounded-r-lg border border-l-0 transition-colors ${t.stepper}`}
+                        aria-label="Aumentar"
+                      >
+                        <FiPlus className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {estoqueInsuficiente && (
+                      <p className="mt-1.5 text-[11px] text-[#d33e3e] flex items-center gap-1">
+                        <FiAlertTriangle className="w-3.5 h-3.5" />
+                        Quantidade maior que o estoque disponível ({pecaSelecionada.quantidade} un).
+                      </p>
                     )}
                   </div>
 
-                  {/* Dropdown de sugestões */}
-                  {sugestoes.length > 0 && (
-                    <div className={`absolute left-0 right-0 top-full mt-1 border rounded-lg shadow-lg z-20 overflow-hidden divide-y ${t.dropdown}`}>
-                      {sugestoes.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => handleSelectPeca(p)}
-                          className={`w-full text-left px-3.5 py-2 transition-colors flex items-center justify-between gap-3 ${t.dropdownItem}`}
-                        >
-                          <div className="min-w-0">
-                            <span className="font-bold text-xs text-[#b85824] block font-mono">{p.codigo}</span>
-                            <span className={`text-xs truncate block ${t.textoMedio}`}>{p.nome}</span>
-                          </div>
-                          <span className={`text-[11px] font-mono shrink-0 ${t.textoFraco}`}>{p.quantidade} un</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Mensagem quando nada é encontrado */}
-                  {skuBusca.trim() && !pecaSelecionada && sugestoes.length === 0 && !loading && (
-                    <p className={`mt-1.5 text-[11px] ${t.textoFraco}`}>Nenhuma peça encontrada com esse código ou nome.</p>
-                  )}
-
-                  {/* Detalhe da peça selecionada */}
-                  {pecaSelecionada && (
-                    <div className={`mt-2 p-3 rounded-lg border text-xs ${t.detalhe}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <span className={`font-semibold block ${t.textoForte}`}>{pecaSelecionada.nome}</span>
-                        <StatusBadge status={pecaSelecionada.status} />
-                      </div>
-                      <div className={`mt-2 grid grid-cols-3 gap-2 font-mono ${t.textoSuave}`}>
-                        <div>
-                          <span className="block text-[10px] uppercase tracking-wider">Atual</span>
-                          <strong className={t.textoForte}>{pecaSelecionada.quantidade} un</strong>
-                        </div>
-                        <div>
-                          <span className="block text-[10px] uppercase tracking-wider">Mínimo</span>
-                          <strong className={t.textoForte}>{pecaSelecionada.pontoReposicao} un</strong>
-                        </div>
-                        <div>
-                          <span className="block text-[10px] uppercase tracking-wider">Depois</span>
-                          <strong className={estoqueInsuficiente ? 'text-[#d33e3e]' : aba.tipo === 'saida' ? 'text-amber-600' : 'text-[#16a34a]'}>
-                            {estoqueDepois} un
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Quantidade com Stepper */}
-                <div>
-                  <Rotulo t={t}>Quantidade</Rotulo>
-                  <div className="flex items-center">
-                    <button
-                      type="button"
-                      onClick={handleDecrement}
-                      disabled={quantidade <= 1}
-                      className={`w-10 h-10 flex items-center justify-center rounded-l-lg border border-r-0 transition-colors disabled:opacity-40 ${t.stepper}`}
-                      aria-label="Diminuir"
-                    >
-                      <FiMinus className="w-4 h-4" />
-                    </button>
+                  {/* Ordem de Serviço ou Documento */}
+                  <div>
+                    <Rotulo t={t}>{aba.rotuloDocumento}</Rotulo>
                     <input
-                      type="number"
-                      min="1"
-                      value={quantidade}
-                      onChange={(e) => setQuantidade(Math.max(1, Number(e.target.value) || 1))}
-                      className={`w-full h-10 text-center font-bold text-sm border-y focus:outline-none ${t.input} ${estoqueInsuficiente ? '!text-[#d33e3e]' : ''}`}
+                      type="text"
+                      value={documento}
+                      onChange={(e) => setDocumento(e.target.value)}
+                      placeholder={aba.documentoPadrao}
+                      className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-amber-600 focus:border-amber-600 transition-all font-mono ${t.input}`}
                     />
+                  </div>
+
+                  {/* Botão de Confirmação */}
+                  <div className="pt-2 mt-auto">
                     <button
-                      type="button"
-                      onClick={handleIncrement}
-                      className={`w-10 h-10 flex items-center justify-center rounded-r-lg border border-l-0 transition-colors ${t.stepper}`}
-                      aria-label="Aumentar"
+                      type="submit"
+                      disabled={loadingAction || estoqueInsuficiente || loading}
+                      className={`w-full py-3 px-4 rounded-lg font-bold text-sm text-white shadow-xs transition-all active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${aba.corBotao}`}
                     >
-                      <FiPlus className="w-4 h-4" />
+                      {loadingAction ? (
+                        <>
+                          <FiLoader className="w-4 h-4 animate-spin" />
+                          Processando...
+                        </>
+                      ) : (
+                        <>
+                          {aba.tipo === 'saida' ? <FiArrowDown className="w-4 h-4" /> : <FiArrowUp className="w-4 h-4" />}
+                          {aba.botao}
+                        </>
+                      )}
                     </button>
                   </div>
-                  {estoqueInsuficiente && (
-                    <p className="mt-1.5 text-[11px] text-[#d33e3e] flex items-center gap-1">
-                      <FiAlertTriangle className="w-3.5 h-3.5" />
-                      Quantidade maior que o estoque disponível ({pecaSelecionada.quantidade} un).
-                    </p>
-                  )}
-                </div>
-
-                {/* Ordem de Serviço ou Documento */}
-                <div>
-                  <Rotulo t={t}>{aba.rotuloDocumento}</Rotulo>
-                  <input
-                    type="text"
-                    value={documento}
-                    onChange={(e) => setDocumento(e.target.value)}
-                    placeholder={aba.documentoPadrao}
-                    className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-amber-600 focus:border-amber-600 transition-all font-mono ${t.input}`}
-                  />
-                </div>
-
-                {/* Botão de Confirmação */}
-                <div className="pt-2 mt-auto">
-                  <button
-                    type="submit"
-                    disabled={loadingAction || estoqueInsuficiente || loading}
-                    className={`w-full py-3 px-4 rounded-lg font-bold text-sm text-white shadow-xs transition-all active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${aba.corBotao}`}
-                  >
-                    {loadingAction ? (
-                      <>
-                        <FiLoader className="w-4 h-4 animate-spin" />
-                        Processando...
-                      </>
-                    ) : (
-                      <>
-                        {aba.tipo === 'saida' ? <FiArrowDown className="w-4 h-4" /> : <FiArrowUp className="w-4 h-4" />}
-                        {aba.botao}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-
-          {/* Card Direito: Histórico de movimentações */}
-          <div className={`lg:col-span-7 border rounded-xl p-6 shadow-xs flex flex-col ${t.card}`}>
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <span className="text-[11px] font-mono tracking-widest text-[#a89e90] uppercase font-bold">
-                {periodo === 'hoje' ? 'Movimentações de Hoje' : 'Todas as Movimentações'}
-              </span>
-
-              <div className="flex items-center gap-2">
-                <Filtro t={t} opcoes={[['hoje', 'Hoje'], ['todos', 'Tudo']]} valor={periodo} onChange={setPeriodo} />
-                <Filtro
-                  t={t}
-                  opcoes={[['todos', 'Todos'], ['entrada', 'Entradas'], ['saida', 'Saídas']]}
-                  valor={filtroTipo}
-                  onChange={setFiltroTipo}
-                />
-              </div>
+                </form>
+              )}
             </div>
 
-            {loading ? (
-              <div className={`flex flex-col items-center justify-center py-20 ${t.textoFraco}`}>
-                <FiLoader className="w-6 h-6 animate-spin text-amber-600 mb-2" />
-                <span className="text-xs">Carregando histórico...</span>
-              </div>
-            ) : movsFiltradas.length === 0 ? (
-              <div className={`py-16 text-center ${t.textoFraco}`}>
-                <FiPackage className="w-8 h-8 mx-auto mb-3 opacity-60" />
-                <p className="text-sm font-medium">
-                  {periodo === 'hoje' ? 'Nenhuma movimentação registrada hoje.' : 'Nenhuma movimentação encontrada.'}
-                </p>
-                <p className="text-xs mt-1">Utilize o formulário ao lado para dar saída ou entrada.</p>
-                {periodo === 'hoje' && movimentacoes.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setPeriodo('todos')}
-                    className="mt-4 text-xs font-semibold text-amber-600 hover:underline"
-                  >
-                    Ver movimentações anteriores
-                  </button>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className={`divide-y -mx-2 overflow-y-auto max-h-[520px] ${t.divisor}`}>
-                  {movsFiltradas.map((mov) => {
-                    const isSaida = mov.tipo === 'saida';
+            {/* Card Direito: Histórico de movimentações */}
+            <div className={`lg:col-span-7 border rounded-xl p-6 shadow-xs flex flex-col ${t.card}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <span className="text-[11px] font-mono tracking-widest text-[#a89e90] uppercase font-bold">
+                  {periodo === 'hoje' ? 'Movimentações de Hoje' : 'Todas as Movimentações'}
+                </span>
 
-                    return (
-                      <div
-                        key={mov.id}
-                        className={`py-3.5 px-2 flex items-center justify-between gap-4 rounded-lg transition-colors group ${t.linha}`}
-                      >
-                        {/* Ícone de Seta e Nome da Peça */}
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center ${
-                              isSaida ? 'bg-red-500/10 text-[#d33e3e]' : 'bg-emerald-500/10 text-[#16a34a]'
-                            }`}
-                          >
-                            {isSaida ? <FiArrowDown className="w-4 h-4 stroke-[2.5]" /> : <FiArrowUp className="w-4 h-4 stroke-[2.5]" />}
-                          </div>
-
-                          <div className="min-w-0">
-                            <h4 className={`font-semibold text-sm truncate group-hover:text-amber-600 transition-colors ${t.textoForte}`}>
-                              {mov.pecaNome}
-                            </h4>
-                            <p className={`text-xs font-mono mt-0.5 truncate ${t.textoFraco}`}>
-                              {mov.sku} · {mov.motivo} · {mov.documento}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Quantidade e Horário */}
-                        <div className="text-right shrink-0">
-                          <span className={`text-base font-extrabold font-mono ${isSaida ? 'text-[#d33e3e]' : 'text-[#16a34a]'}`}>
-                            {isSaida ? `-${mov.quantidade}` : `+${mov.quantidade}`}
-                          </span>
-                          <span className={`block text-[11px] font-mono mt-0.5 ${t.textoFraco}`}>
-                            {periodo === 'todos' && !ehHoje(mov.dataHora) ? `${mov.dataFormatada} · ` : ''}
-                            {mov.hora}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="flex items-center gap-2">
+                  <Filtro t={t} opcoes={[['hoje', 'Hoje'], ['todos', 'Tudo']]} valor={periodo} onChange={setPeriodo} />
+                  <Filtro
+                    t={t}
+                    opcoes={[['todos', 'Todos'], ['entrada', 'Entradas'], ['saida', 'Saídas']]}
+                    valor={filtroTipo}
+                    onChange={setFiltroTipo}
+                  />
                 </div>
-                <p className={`pt-3 mt-1 text-[11px] font-mono text-right ${t.textoFraco}`}>
-                  {movsFiltradas.length} {movsFiltradas.length === 1 ? 'registro' : 'registros'}
-                </p>
-              </>
-            )}
+              </div>
+
+              {loading ? (
+                <div className={`flex flex-col items-center justify-center py-20 ${t.textoFraco}`}>
+                  <FiLoader className="w-6 h-6 animate-spin text-amber-600 mb-2" />
+                  <span className="text-xs">Carregando histórico...</span>
+                </div>
+              ) : movsFiltradas.length === 0 ? (
+                <div className={`py-16 text-center ${t.textoFraco}`}>
+                  <FiPackage className="w-8 h-8 mx-auto mb-3 opacity-60" />
+                  <p className="text-sm font-medium">
+                    {periodo === 'hoje' ? 'Nenhuma movimentação registrada hoje.' : 'Nenhuma movimentação encontrada.'}
+                  </p>
+                  <p className="text-xs mt-1">Utilize o formulário ao lado para dar saída ou entrada.</p>
+                  {periodo === 'hoje' && movimentacoes.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPeriodo('todos')}
+                      className="mt-4 text-xs font-semibold text-amber-600 hover:underline"
+                    >
+                      Ver movimentações anteriores
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className={`divide-y -mx-2 overflow-y-auto max-h-[520px] ${t.divisor}`}>
+                    {movsFiltradas.map((mov) => {
+                      const isSaida = mov.tipo === 'saida';
+
+                      return (
+                        <div
+                          key={mov.id}
+                          className={`py-3.5 px-2 flex items-center justify-between gap-4 rounded-lg transition-colors group ${t.linha}`}
+                        >
+                          {/* Ícone de Seta e Nome da Peça */}
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center ${
+                                isSaida ? 'bg-red-500/10 text-[#d33e3e]' : 'bg-emerald-500/10 text-[#16a34a]'
+                              }`}
+                            >
+                              {isSaida ? <FiArrowDown className="w-4 h-4 stroke-[2.5]" /> : <FiArrowUp className="w-4 h-4 stroke-[2.5]" />}
+                            </div>
+
+                            <div className="min-w-0">
+                              <h4 className={`font-semibold text-sm truncate group-hover:text-amber-600 transition-colors ${t.textoForte}`}>
+                                {mov.pecaNome}
+                              </h4>
+                              <p className={`text-xs font-mono mt-0.5 truncate ${t.textoFraco}`}>
+                                {mov.sku} · {mov.motivo} · {mov.documento}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Quantidade e Horário */}
+                          <div className="text-right shrink-0">
+                            <span className={`text-base font-extrabold font-mono ${isSaida ? 'text-[#d33e3e]' : 'text-[#16a34a]'}`}>
+                              {isSaida ? `-${mov.quantidade}` : `+${mov.quantidade}`}
+                            </span>
+                            <span className={`block text-[11px] font-mono mt-0.5 ${t.textoFraco}`}>
+                              {periodo === 'todos' && !ehHoje(mov.dataHora) ? `${mov.dataFormatada} · ` : ''}
+                              {mov.hora}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className={`pt-3 mt-1 text-[11px] font-mono text-right ${t.textoFraco}`}>
+                    {movsFiltradas.length} {movsFiltradas.length === 1 ? 'registro' : 'registros'}
+                  </p>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
