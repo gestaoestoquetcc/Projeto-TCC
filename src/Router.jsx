@@ -5,6 +5,7 @@ import EstoquePage from "./pages/private/estoque";
 import MovimentacoesPage from "./pages/private/movimentacoes";
 import PrevisaoPage from "./pages/private/previsao";
 import FornecedoresPage from "./pages/private/fornecedores";
+import FinanceiroPage from "./pages/private/financeiro";
 import LoginPage from "./pages/public/Login";
 import CadastroPage from "./pages/public/Cadastro";
 import EsqueciSenhaPage from "./pages/public/EsqueciSenha";
@@ -33,6 +34,7 @@ export default function Router() {
         <Route path="/movimentacao" element={<MovimentacoesPage />} />
         <Route path="/entrada-saida" element={<MovimentacoesPage />} />
         <Route path="/fornecedores" element={<FornecedoresPage />} />
+        <Route path="/financeiro" element={<FinanceiroPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

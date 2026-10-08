@@ -9,7 +9,8 @@ import {
   FiSettings, 
   FiSun,
   FiMoon,
-  FiLogOut
+  FiLogOut,
+  FiDollarSign
 } from 'react-icons/fi';
 import { RiShieldFlashFill } from 'react-icons/ri';
 import { useAuth } from '../../contexts/AuthContext';
@@ -32,6 +33,7 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
     { id: 'previsao', label: 'Previsão IA', icon: FiTrendingUp, path: '/previsao', badge: 'LIVE' },
     { id: 'movimentacao', label: 'Entrada/Saída', icon: FiRepeat, path: '/movimentacao' },
     { id: 'fornecedores', label: 'Fornecedores', icon: FiTruck, path: '/fornecedores' },
+    { id: 'financeiro', label: 'Financeiro', icon: FiDollarSign, path: '/financeiro' },
     { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/configuracoes' },
   ];
 
