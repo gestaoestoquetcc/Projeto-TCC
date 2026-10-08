@@ -1,225 +1,150 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  FiPackage, 
-  FiRepeat, 
-  FiAlertTriangle, 
-  FiAlertOctagon, 
-  FiTrendingUp, 
-  FiPlus, 
-  FiArrowRight, 
-  FiCpu, 
-  FiRefreshCw 
-} from 'react-icons/fi';
+import React, { useState, useEffect } from 'react';
+import { FiRefreshCw, FiLoader, FiAlertCircle } from 'react-icons/fi';
 
-import Sidebar from '../../components/layout/Sidebar';
-import MetricCard from '../../components/dashboard/MetricCard';
-import AlertasPreditivos from '../../components/dashboard/AlertasPreditivos';
-import GraficoSaidas from '../../components/dashboard/GraficoSaidas';
-import PaineisEstoque from '../../components/dashboard/PaineisEstoque';
+import Sidebar from '@components/layout/Sidebar';
+import CardsRapidos from '@sections/dashboard/cardsrapidos';
+import AlertasPreditivos from '@sections/dashboard/alertas';
+import Graficos from '@sections/dashboard/graficos';
 import { getPecas } from '../../services/pecasService';
+import { getMovimentacoes } from '../../services/movimentacoesService';
+
+// Cores do tema claro / escuro (passadas para cada seção)
+const TEMAS = {
+  claro: {
+    pagina: 'bg-[#f7f5f0] text-gray-900',
+    titulo: 'text-gray-900',
+    textoForte: 'text-gray-900',
+    textoSuave: 'text-gray-500',
+    textoFraco: 'text-gray-400',
+    card: 'bg-white/90 border-[#e5dfd4]',
+    abas: 'bg-[#f7f5f0] border-[#e5dfd4]',
+    abaInativa: 'text-gray-500 hover:text-gray-900',
+    grade: '#ece8e1',
+    linhaDivisoria: 'bg-[#e5dfd4]',
+  },
+  escuro: {
+    pagina: 'bg-[#12161f] text-gray-100',
+    titulo: 'text-white',
+    textoForte: 'text-gray-100',
+    textoSuave: 'text-gray-400',
+    textoFraco: 'text-gray-500',
+    card: 'bg-[#181d27] border-[#262c38]',
+    abas: 'bg-[#11151d] border-[#262c38]',
+    abaInativa: 'text-gray-400 hover:text-white',
+    grade: '#262c38',
+    linhaDivisoria: 'bg-[#262c38]',
+  },
+};
+
+// Ex.: "OUT 2026 · SEMANA 41"
+function cabecalhoData() {
+  const hoje = new Date();
+  const mes = hoje.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
+  const inicioAno = new Date(hoje.getFullYear(), 0, 1);
+  const semana = Math.ceil(((hoje - inicioAno) / 86400000 + inicioAno.getDay() + 1) / 7);
+  return `${mes} ${hoje.getFullYear()} · Semana ${semana}`;
+}
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
   const [pecas, setPecas] = useState([]);
+  const [movimentacoes, setMovimentacoes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState('');
+  const [ultimaSync, setUltimaSync] = useState(null);
   const [isDark, setIsDark] = useState(false);
-  const [horaSincronizacao, setHoraSincronizacao] = useState('09:14');
 
-  // Buscar dados reais do Supabase
-  const carregarDados = async () => {
-    try {
-      setLoading(true);
-      const listaPecas = await getPecas();
-      setPecas(listaPecas);
-      const agora = new Date();
-      setHoraSincronizacao(
-        agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-      );
-    } catch (err) {
-      console.error('Erro ao carregar dados do dashboard:', err);
-    } finally {
-      setLoading(false);
-    }
+  const t = isDark ? TEMAS.escuro : TEMAS.claro;
+
+  // "versao" muda quando clica em Atualizar, e isso faz o useEffect buscar de novo
+  const [versao, setVersao] = useState(0);
+
+  // Busca peças e movimentações no Supabase
+  useEffect(() => {
+    let ativo = true; // evita atualizar a tela se ela já foi fechada
+    Promise.all([getPecas(), getMovimentacoes()])
+      .then(([listaPecas, listaMovs]) => {
+        if (!ativo) return;
+        setPecas(listaPecas);
+        setMovimentacoes(listaMovs);
+        setUltimaSync(new Date());
+        setErro('');
+      })
+      .catch((err) => {
+        console.error(err);
+        if (ativo) setErro('Não foi possível carregar os dados do Supabase. Verifique sua conexão ou o arquivo .env.');
+      })
+      .finally(() => {
+        if (ativo) setLoading(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [versao]);
+
+  // Botão de atualizar
+  const carregarDados = () => {
+    setLoading(true);
+    setVersao((v) => v + 1);
   };
 
-  useEffect(() => {
-    carregarDados();
-  }, []);
-
-  // Cálculos dinâmicos dos KPIs a partir do Supabase
-  const kpis = useMemo(() => {
-    if (pecas.length === 0) {
-      return {
-        volumeTotal: 285,
-        giroMedio: '6.3',
-        rupturas: 2,
-        atencao: 2
-      };
-    }
-
-    const volumeTotal = pecas.reduce((acc, p) => acc + (p.quantidade || 0), 0);
-    const rupturas = pecas.filter((p) => p.status === 'critico').length;
-    const atencao = pecas.filter((p) => p.status === 'atencao').length;
-    
-    return {
-      volumeTotal,
-      giroMedio: '6.3',
-      rupturas,
-      atencao
-    };
-  }, [pecas]);
-
-
-
   return (
-    <div className={`flex min-h-screen ${isDark ? 'bg-[#12161f] text-gray-100' : 'bg-[#f7f5f0] text-gray-900'}`}>
-      {/* Sidebar AutoStock com aba ativa no Dashboard */}
-      <Sidebar 
-        activeTab="dashboard" 
-        isDark={isDark} 
-        onToggleDark={() => setIsDark((prev) => !prev)} 
-      />
+    <div className={`flex min-h-screen ${t.pagina}`}>
+      <Sidebar activeTab="dashboard" isDark={isDark} onToggleDark={() => setIsDark((prev) => !prev)} />
 
-      {/* Main Content Area */}
-      <main className="flex-1 min-w-0 flex flex-col px-8 py-8 overflow-y-auto">
-        {/* Top Header: Data, Título e Indicador de Sincronização */}
-        <header className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <main className="flex-1 min-w-0 flex flex-col px-4 sm:px-8 py-8 overflow-y-auto">
+        {/* Cabeçalho */}
+        <header className="flex items-end justify-between gap-4 pb-4 mb-8 border-b border-[#e5dfd4]/70">
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#a89e90] block mb-1">
-              SET 2026 · SEMANA 37
+            <span className="text-[11px] font-mono font-bold uppercase tracking-[0.2em] text-[#a89e90] block mb-1">
+              {cabecalhoData()}
             </span>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight uppercase">
-              Visão Geral
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Indicador de Sincronização */}
-            <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>sync {horaSincronizacao}</span>
-            </div>
-
-            {/* Botão de Atualização Rápida */}
-            <button
-              type="button"
-              onClick={carregarDados}
-              disabled={loading}
-              className="p-2 rounded-lg text-gray-400 hover:text-amber-800 hover:bg-black/5 transition-colors disabled:opacity-50"
-              title="Sincronizar com Supabase"
-            >
-              <FiRefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-
-            {/* Ações Rápidas */}
-            <button
-              type="button"
-              onClick={() => navigate('/movimentacao')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-[#e5dfd4] rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-2xs transition-colors"
-            >
-              <FiRepeat className="w-3.5 h-3.5 text-amber-600" />
-              Entrada/Saída
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/pecas')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#c8672b] hover:bg-[#b85b20] text-white rounded-lg text-xs font-bold shadow-xs hover:shadow transition-all"
-            >
-              <FiPlus className="w-3.5 h-3.5 stroke-[2.5]" />
-              Catálogo
-            </button>
-          </div>
-        </header>
-
-        {/* 4 Cards de Métricas / KPIs */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <MetricCard
-            title="Vol. em Estoque"
-            value={kpis.volumeTotal}
-            unit="un."
-            delta="+3.2%"
-            deltaType="positive"
-            icon={FiPackage}
-          />
-
-          <MetricCard
-            title="Giro Médio"
-            value={kpis.giroMedio}
-            unit="x/mês"
-            delta="+0.8"
-            deltaType="positive"
-            icon={FiTrendingUp}
-          />
-
-          <MetricCard
-            title="Rupturas"
-            value={kpis.rupturas}
-            unit="SKUs"
-            delta={`+${kpis.rupturas}`}
-            deltaType="critical"
-            icon={FiAlertOctagon}
-          />
-
-          <MetricCard
-            title="Atenção"
-            value={kpis.atencao}
-            unit="abaixo do ponto"
-            delta="-"
-            deltaType="warning"
-            icon={FiAlertTriangle}
-          />
-        </section>
-
-        {/* Seção de Alertas Preditivos (IA) */}
-        <AlertasPreditivos 
-          onGerarPedido={(alerta) => {
-            navigate('/movimentacao');
-          }}
-          onAbrirDetalheIA={(alerta) => {
-            navigate('/previsao');
-          }}
-        />
-
-        {/* Gráfico de Saídas por Segmento (Últimos 6 meses) */}
-        <section className="mb-8">
-          <GraficoSaidas />
-        </section>
-
-        {/* Paineis de Itens Críticos e Maior Giro */}
-        <PaineisEstoque pecas={pecas} />
-
-        {/* [EXTRA] Diagnóstico do Motor de IA AutoStock */}
-        <section className="bg-gradient-to-br from-white to-[#fbf9f4] border border-[#e5dfd4] rounded-xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-600/10 text-amber-700 flex items-center justify-center shrink-0">
-              <FiCpu className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono tracking-widest text-[#a89e90] uppercase font-bold">
-                  Motor de IA AutoStock
-                </span>
-                <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  Operando normalmente
-                </span>
-              </div>
-              <p className="text-xs text-gray-600 mt-0.5">
-                Previsões calculadas automaticamente com base no histórico de saídas e sazonalidade automotiva.
-              </p>
-            </div>
+            <h1 className={`text-3xl font-black tracking-tight uppercase ${t.titulo}`}>Visão Geral</h1>
           </div>
 
           <button
             type="button"
-            onClick={() => navigate('/pecas')}
-            className="text-xs font-bold text-amber-800 hover:text-amber-900 inline-flex items-center gap-1 transition-colors shrink-0"
+            onClick={carregarDados}
+            disabled={loading}
+            className={`inline-flex items-center gap-2 text-xs font-mono transition-colors p-2 rounded-lg hover:bg-black/5 disabled:opacity-50 ${t.textoSuave}`}
+            title="Recarregar dados do Supabase"
           >
-            Gerenciar Estoque Completo
-            <FiArrowRight className="w-3.5 h-3.5" />
+            {loading ? (
+              <FiRefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <span className={`w-2 h-2 rounded-full ${erro ? 'bg-red-500' : 'bg-emerald-500'}`} />
+            )}
+            {ultimaSync
+              ? `sync ${ultimaSync.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+              : 'sincronizando...'}
           </button>
-        </section>
+        </header>
+
+        {erro && (
+          <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-center gap-2">
+            <FiAlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{erro}</span>
+            <button
+              type="button"
+              onClick={carregarDados}
+              className="ml-auto shrink-0 px-3 py-1 bg-red-600 text-white text-[11px] font-bold rounded-md hover:bg-red-700"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
+        {loading && pecas.length === 0 ? (
+          <div className={`flex flex-col items-center justify-center py-24 border rounded-xl ${t.card}`}>
+            <FiLoader className="w-8 h-8 text-amber-600 animate-spin mb-3" />
+            <span className={`text-sm font-semibold ${t.textoSuave}`}>Carregando dashboard do Supabase...</span>
+          </div>
+        ) : (
+          <>
+            <CardsRapidos t={t} pecas={pecas} movimentacoes={movimentacoes} agora={ultimaSync} />
+            <AlertasPreditivos t={t} pecas={pecas} movimentacoes={movimentacoes} agora={ultimaSync} />
+            <Graficos t={t} pecas={pecas} movimentacoes={movimentacoes} />
+          </>
+        )}
       </main>
     </div>
   );
