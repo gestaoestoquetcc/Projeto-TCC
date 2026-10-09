@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { FiRefreshCw, FiLoader, FiAlertCircle, FiChevronLeft, FiChevronRight, FiDatabase } from 'react-icons/fi';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { FiRefreshCw, FiLoader, FiAlertCircle, FiChevronLeft, FiChevronRight, FiChevronDown, FiDatabase, FiCalendar } from 'react-icons/fi';
 
 import Sidebar from '@components/layout/Sidebar';
 import GraficoFinanceiro from '@components/financeiro/GraficoFinanceiro';
@@ -30,6 +30,8 @@ const TEMAS = {
     abaInativa: 'text-gray-500 hover:text-gray-900',
     grade: '#ece8e1',
     linhaDivisoria: 'bg-[#e5dfd4]',
+    popup: 'bg-white border-[#e5dfd4]',
+    mesBotao: 'bg-[#f7f5f0]',
   },
   escuro: {
     pagina: 'bg-[#12161f] text-gray-100',
@@ -42,6 +44,8 @@ const TEMAS = {
     abaInativa: 'text-gray-400 hover:text-white',
     grade: '#262c38',
     linhaDivisoria: 'bg-[#262c38]',
+    popup: 'bg-[#181d27] border-[#262c38]',
+    mesBotao: 'bg-[#11151d]',
   },
 };
 
@@ -128,6 +132,17 @@ export default function FinanceiroPage() {
     return lista;
   }, [vendas, lancamentos, ultimaSync]);
 
+  // Meses que têm vendas ou lançamentos no caixa (aparecem com um ponto no calendário)
+  const mesesComDados = useMemo(() => {
+    const set = new Set();
+    vendas.forEach((v) => set.add(`${v.data.getFullYear()}-${v.data.getMonth()}`));
+    lancamentos.forEach((l) => {
+      const d = new Date(`${l.data}T12:00:00`);
+      set.add(`${d.getFullYear()}-${d.getMonth()}`);
+    });
+    return set;
+  }, [vendas, lancamentos]);
+
   async function salvarLancamento(dados) {
     const novo = await criarLancamento(dados);
     setLancamentos((lista) => [novo, ...lista]);
@@ -202,7 +217,7 @@ export default function FinanceiroPage() {
           </div>
         ) : (
           <>
-            <FiltroMes t={t} escolhido={mesEscolhido} opcoes={opcoesMeses} onEscolher={setMesEscolhido} onPassar={trocarMes} />
+            <FiltroMes t={t} escolhido={mesEscolhido} opcoes={opcoesMeses} comDados={mesesComDados} hoje={ultimaSync} onEscolher={setMesEscolhido} onPassar={trocarMes} />
             <Indicadores t={t} r={resumo} />
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
@@ -261,16 +276,16 @@ export default function FinanceiroPage() {
 
 // ---------- Partes da tela ----------
 
-/** Filtro de mês: atalhos rápidos + lista com todos os meses + setas */
-function FiltroMes({ t, escolhido, opcoes, onEscolher, onPassar }) {
+/** Filtro de mês: atalhos rápidos + calendário de meses organizado por ano + setas */
+function FiltroMes({ t, escolhido, opcoes, comDados, hoje, onEscolher, onPassar }) {
   const igual = (a, b) => a && b && a.ano === b.ano && a.mes === b.mes;
   const atalhos = [
     { rotulo: 'Este mês', valor: opcoes[0] },
     { rotulo: 'Mês passado', valor: opcoes[1] },
     { rotulo: 'Há 2 meses', valor: opcoes[2] },
   ].filter((a) => a.valor);
-  const valorSelect = `${escolhido.ano}-${escolhido.mes}`;
-  const naLista = opcoes.some((o) => igual(o, escolhido));
+  // Não deixa passar do mês atual
+  const noMesAtual = escolhido.ano === hoje.getFullYear() && escolhido.mes === hoje.getMonth();
 
   return (
     <section className={`border rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 ${t.card}`} aria-label="Filtrar por mês">
@@ -296,31 +311,152 @@ function FiltroMes({ t, escolhido, opcoes, onEscolher, onPassar }) {
       </div>
 
       <div className="flex items-center gap-1 ml-auto">
-        <button type="button" onClick={() => onPassar(-1)} aria-label="Mês anterior" className={`w-8 h-8 rounded-lg border flex items-center justify-center hover:text-[#c8672b] ${t.card} ${t.textoSuave}`}>
+        <button type="button" onClick={() => onPassar(-1)} aria-label="Mês anterior" className={`w-9 h-9 rounded-lg border flex items-center justify-center hover:text-[#c8672b] ${t.card} ${t.textoSuave}`}>
           <FiChevronLeft />
         </button>
-        <label htmlFor="filtro-mes" className="sr-only">Escolher mês</label>
-        <select
-          id="filtro-mes"
-          value={valorSelect}
-          onChange={(e) => {
-            const [ano, mes] = e.target.value.split('-').map(Number);
-            onEscolher({ ano, mes });
-          }}
-          className={`h-8 min-w-[170px] rounded-lg border px-2 text-sm font-bold bg-transparent outline-none focus:border-[#c8672b] ${t.card} ${t.textoForte}`}
+        <SeletorMes t={t} escolhido={escolhido} opcoes={opcoes} comDados={comDados} hoje={hoje} onEscolher={onEscolher} />
+        <button
+          type="button"
+          onClick={() => onPassar(1)}
+          disabled={noMesAtual}
+          aria-label="Próximo mês"
+          className={`w-9 h-9 rounded-lg border flex items-center justify-center hover:text-[#c8672b] disabled:opacity-40 disabled:hover:text-inherit ${t.card} ${t.textoSuave}`}
         >
-          {!naLista && <option value={valorSelect}>{nomeMes(escolhido.ano, escolhido.mes)}</option>}
-          {opcoes.map((o) => (
-            <option key={`${o.ano}-${o.mes}`} value={`${o.ano}-${o.mes}`}>
-              {nomeMes(o.ano, o.mes)}
-            </option>
-          ))}
-        </select>
-        <button type="button" onClick={() => onPassar(1)} aria-label="Próximo mês" className={`w-8 h-8 rounded-lg border flex items-center justify-center hover:text-[#c8672b] ${t.card} ${t.textoSuave}`}>
           <FiChevronRight />
         </button>
       </div>
     </section>
+  );
+}
+
+const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+/**
+ * Botão com o mês escolhido. Ao clicar abre um "calendário de meses":
+ * o ano no topo (com setas) e os 12 meses em ordem, de janeiro a dezembro.
+ * Ponto laranja = mês com vendas ou lançamentos. Meses do futuro ficam apagados.
+ */
+function SeletorMes({ t, escolhido, opcoes, comDados, hoje, onEscolher }) {
+  const [aberto, setAberto] = useState(false);
+  const [anoVisivel, setAnoVisivel] = useState(escolhido.ano);
+  const caixaRef = useRef(null);
+
+  const anoMinimo = Math.min(...opcoes.map((o) => o.ano), hoje.getFullYear());
+  const anoAtual = hoje.getFullYear();
+
+  // Fecha ao clicar fora ou apertar Esc
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e) => {
+      if (caixaRef.current && !caixaRef.current.contains(e.target)) setAberto(false);
+    };
+    const esc = (e) => e.key === 'Escape' && setAberto(false);
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [aberto]);
+
+  const abrirFechar = () => {
+    setAnoVisivel(escolhido.ano);
+    setAberto((a) => !a);
+  };
+
+  return (
+    <div className="relative" ref={caixaRef}>
+      <button
+        type="button"
+        onClick={abrirFechar}
+        aria-haspopup="dialog"
+        aria-expanded={aberto}
+        className={`h-9 min-w-[190px] px-3 rounded-lg border inline-flex items-center justify-between gap-2 text-sm font-bold hover:border-[#c8672b] ${t.card} ${t.textoForte}`}
+      >
+        <span className="inline-flex items-center gap-2">
+          <FiCalendar className="w-4 h-4 text-[#c8672b]" />
+          {nomeMes(escolhido.ano, escolhido.mes)}
+        </span>
+        <FiChevronDown className={`w-4 h-4 transition-transform ${aberto ? 'rotate-180' : ''} ${t.textoSuave}`} />
+      </button>
+
+      {aberto && (
+        <div
+          role="dialog"
+          aria-label="Escolher mês"
+          className={`absolute right-0 top-11 z-30 w-[280px] rounded-xl border shadow-xl p-3 ${t.popup}`}
+        >
+          {/* Ano */}
+          <div className="flex items-center justify-between mb-3">
+            <button
+              type="button"
+              onClick={() => setAnoVisivel((a) => a - 1)}
+              disabled={anoVisivel <= anoMinimo}
+              aria-label="Ano anterior"
+              className={`w-8 h-8 rounded-md flex items-center justify-center hover:bg-black/5 disabled:opacity-30 ${t.textoSuave}`}
+            >
+              <FiChevronLeft />
+            </button>
+            <span className={`text-base font-black font-mono ${t.textoForte}`}>{anoVisivel}</span>
+            <button
+              type="button"
+              onClick={() => setAnoVisivel((a) => a + 1)}
+              disabled={anoVisivel >= anoAtual}
+              aria-label="Próximo ano"
+              className={`w-8 h-8 rounded-md flex items-center justify-center hover:bg-black/5 disabled:opacity-30 ${t.textoSuave}`}
+            >
+              <FiChevronRight />
+            </button>
+          </div>
+
+          {/* 12 meses em ordem */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {MESES_CURTOS.map((nome, mes) => {
+              const futuro = anoVisivel > anoAtual || (anoVisivel === anoAtual && mes > hoje.getMonth());
+              const selecionado = anoVisivel === escolhido.ano && mes === escolhido.mes;
+              const atual = anoVisivel === anoAtual && mes === hoje.getMonth();
+              const temDados = comDados.has(`${anoVisivel}-${mes}`);
+              return (
+                <button
+                  key={nome}
+                  type="button"
+                  disabled={futuro}
+                  onClick={() => {
+                    onEscolher({ ano: anoVisivel, mes });
+                    setAberto(false);
+                  }}
+                  aria-pressed={selecionado}
+                  className={`relative h-10 rounded-lg text-sm font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                    selecionado
+                      ? 'bg-gradient-to-r from-[#e8772e] to-[#c8672b] text-white shadow-sm'
+                      : `${t.mesBotao} hover:bg-[#c8672b]/15 ${atual ? 'ring-1 ring-[#c8672b]/60 text-[#c8672b]' : t.textoForte}`
+                  }`}
+                >
+                  {nome}
+                  {temDados && !selecionado && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#e8772e]" />}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className={`flex items-center justify-between mt-3 pt-2 border-t text-[11px] ${t.popup} ${t.textoSuave}`}>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#e8772e]" /> tem movimento
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onEscolher({ ano: anoAtual, mes: hoje.getMonth() });
+                setAberto(false);
+              }}
+              className="font-bold text-[#c8672b] hover:underline"
+            >
+              Ir para este mês
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
