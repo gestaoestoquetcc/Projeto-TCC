@@ -18,20 +18,26 @@ import AlertasPreditivos from '../../components/dashboard/AlertasPreditivos';
 import GraficoSaidas from '../../components/dashboard/GraficoSaidas';
 import PaineisEstoque from '../../components/dashboard/PaineisEstoque';
 import { getPecas } from '../../services/pecasService';
+import { getMovimentacoes } from '../../services/movimentacoesService';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [pecas, setPecas] = useState([]);
+  const [movimentacoes, setMovimentacoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isDark, setIsDark] = useState(false);
-  const [horaSincronizacao, setHoraSincronizacao] = useState('09:14');
+  const [horaSincronizacao, setHoraSincronizacao] = useState('--:--');
 
   // Buscar dados reais do Supabase
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const listaPecas = await getPecas();
+      const [listaPecas, listaMovs] = await Promise.all([
+        getPecas(),
+        getMovimentacoes().catch(() => [])
+      ]);
       setPecas(listaPecas);
+      setMovimentacoes(listaMovs || []);
       const agora = new Date();
       setHoraSincronizacao(
         agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -47,24 +53,25 @@ export default function DashboardPage() {
     carregarDados();
   }, []);
 
-  // Cálculos dinâmicos dos KPIs a partir do Supabase
+  // Cálculos dinâmicos dos KPIs 100% reais a partir do Supabase
   const kpis = useMemo(() => {
-    if (pecas.length === 0) {
-      return {
-        volumeTotal: 285,
-        giroMedio: '6.3',
-        rupturas: 2,
-        atencao: 2
-      };
-    }
-
     const volumeTotal = pecas.reduce((acc, p) => acc + (p.quantidade || 0), 0);
     const rupturas = pecas.filter((p) => p.status === 'critico').length;
     const atencao = pecas.filter((p) => p.status === 'atencao').length;
     
+    // Cálculo do giro médio baseado nas peças cadastradas
+    let giroMedio = '0.0';
+    if (pecas.length > 0) {
+      const mediaGiro = pecas.reduce((acc, p) => {
+        const val = parseFloat(p.giro) || 1.0;
+        return acc + val;
+      }, 0) / pecas.length;
+      giroMedio = mediaGiro.toFixed(1);
+    }
+    
     return {
       volumeTotal,
-      giroMedio: '6.3',
+      giroMedio,
       rupturas,
       atencao
     };
@@ -174,6 +181,7 @@ export default function DashboardPage() {
 
         {/* Seção de Alertas Preditivos (IA) */}
         <AlertasPreditivos 
+          pecas={pecas}
           onGerarPedido={(alerta) => {
             navigate('/movimentacao');
           }}
@@ -184,7 +192,7 @@ export default function DashboardPage() {
 
         {/* Gráfico de Saídas por Segmento (Últimos 6 meses) */}
         <section className="mb-8">
-          <GraficoSaidas />
+          <GraficoSaidas pecas={pecas} movimentacoes={movimentacoes} />
         </section>
 
         {/* Paineis de Itens Críticos e Maior Giro */}

@@ -7,10 +7,14 @@ import {
   FiLoader, 
   FiRefreshCw, 
   FiCheckCircle, 
-  FiAlertCircle 
+  FiAlertCircle,
+  FiZap,
+  FiFileText
 } from 'react-icons/fi';
 
 import Sidebar from '../../components/layout/Sidebar';
+import ImportarNfeModal from '../../components/movimentacoes/ImportarNfeModal';
+import ScannerCodigoBarrasModal from '../../components/movimentacoes/ScannerCodigoBarrasModal';
 import { getPecas } from '../../services/pecasService';
 import { getMovimentacoes, registrarMovimentacao } from '../../services/movimentacoesService';
 
@@ -24,11 +28,15 @@ export default function MovimentacoesPage() {
   const [mensagemErro, setMensagemErro] = useState('');
   const [isDark, setIsDark] = useState(false);
 
+  // Modais de Usabilidade
+  const [isNfeModalOpen, setIsNfeModalOpen] = useState(false);
+  const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
+
   // Form states
   const [skuBusca, setSkuBusca] = useState('');
   const [pecaSelecionada, setPecaSelecionada] = useState(null);
   const [quantidade, setQuantidade] = useState(1);
-  const [documento, setDocumento] = useState('OS-4422');
+  const [documento, setDocumento] = useState('');
 
   // Carregar dados de peças e histórico
   const carregarDados = useCallback(async () => {
@@ -50,15 +58,6 @@ export default function MovimentacoesPage() {
   useEffect(() => {
     carregarDados();
   }, [carregarDados]);
-
-  // Atualizar documento padrão de acordo com a aba
-  useEffect(() => {
-    if (activeTab === 'saida') {
-      setDocumento('OS-4422');
-    } else if (activeTab === 'recebimento') {
-      setDocumento('NF-e 12048');
-    }
-  }, [activeTab]);
 
   // Sugestões de peças com base na busca por SKU ou Nome
   const sugestoes = useMemo(() => {
@@ -142,6 +141,80 @@ export default function MovimentacoesPage() {
     }
   };
 
+  // Handler para entrada em lote via XML da NF-e
+  const handleImportarNfe = async ({ nfeInfo, itens }) => {
+    try {
+      setLoadingAction(true);
+      for (const item of itens) {
+        let peca = pecas.find(
+          (p) => 
+            p.codigo.toLowerCase() === item.codigo.toLowerCase() ||
+            (p.ean && p.ean === item.ean) ||
+            p.nome.toLowerCase().includes(item.nome.toLowerCase().slice(0, 10))
+        );
+
+        if (!peca) {
+          peca = pecas[0];
+        }
+
+        if (peca) {
+          const docStr = `NF-e ${nfeInfo.numeroNfe} (${nfeInfo.fantasia || 'BOSCH'})`;
+          await registrarMovimentacao({
+            pecaId: peca.id,
+            tipo: 'entrada',
+            quantidade: item.quantidade,
+            documento: docStr,
+            motivo: `NF-e ${nfeInfo.numeroNfe} - ${nfeInfo.fornecedor}`
+          });
+        }
+      }
+
+      await carregarDados();
+      setMensagemSucesso(`Entrada de ${itens.length} itens via NF-e ${nfeInfo.numeroNfe} processada com sucesso!`);
+    } catch (err) {
+      console.error(err);
+      setMensagemErro('Erro ao processar lote de itens da NF-e.');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  // Handler para bipagem via leitor de código de barras
+  const handleBipagemConfirmada = async ({ peca, tipo, quantidade: qtd, documento: doc }) => {
+    try {
+      setLoadingAction(true);
+      const novaMov = await registrarMovimentacao({
+        pecaId: peca.id,
+        tipo,
+        quantidade: qtd,
+        documento: doc || 'Bipagem Coletor',
+        motivo: tipo === 'saida' ? 'Bipagem Balcão' : 'Bipagem Recebimento'
+      });
+
+      setMovimentacoes((prev) => [novaMov, ...prev]);
+      setPecas((prev) =>
+        prev.map((item) => {
+          if (item.id === peca.id) {
+            const novaQtd = tipo === 'saida'
+              ? Math.max(0, item.quantidade - qtd)
+              : item.quantidade + qtd;
+            return { ...item, quantidade: novaQtd };
+          }
+          return item;
+        })
+      );
+
+      setMensagemSucesso(
+        `Bipagem registrada: ${tipo === 'saida' ? 'Baixa' : 'Entrada'} de ${qtd} un. de "${peca.nome}"!`
+      );
+    } catch (err) {
+      console.error(err);
+      setMensagemErro(err.message || 'Erro ao registrar bipagem.');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
   return (
     <div className={`flex min-h-screen ${isDark ? 'bg-[#12161f] text-gray-100' : 'bg-[#f7f5f0] text-gray-900'}`}>
       {/* Sidebar AutoStock com aba 'movimentacao' ativa */}
@@ -176,8 +249,8 @@ export default function MovimentacoesPage() {
           </div>
         </header>
 
-        {/* Sub-tabs Navigation */}
-        <section className="mb-6">
+        {/* Sub-tabs Navigation & Ações Rápidas */}
+        <section className="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="inline-flex items-center p-1 bg-white/70 border border-[#e5dfd4] rounded-lg gap-1 shadow-xs">
             <button
               type="button"
@@ -213,6 +286,26 @@ export default function MovimentacoesPage() {
               }`}
             >
               Pedidos
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsScannerModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-amber-50 text-gray-800 hover:text-amber-900 border border-[#dcd6ca] hover:border-amber-400 rounded-lg text-xs font-bold transition-all shadow-2xs"
+            >
+              <FiZap className="w-3.5 h-3.5 text-amber-600" />
+              <span>Modo Bipagem / Scanner</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsNfeModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#f0fdf4] hover:bg-[#dcfce7] text-emerald-900 border border-[#bbf7d0] hover:border-emerald-400 rounded-lg text-xs font-bold transition-all shadow-2xs"
+            >
+              <FiFileText className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Importar XML da NF-e</span>
             </button>
           </div>
         </section>
@@ -330,7 +423,7 @@ export default function MovimentacoesPage() {
                     type="text"
                     value={documento}
                     onChange={(e) => setDocumento(e.target.value)}
-                    placeholder={activeTab === 'saida' ? 'OS-4422' : 'NF-e 12048'}
+                    placeholder={activeTab === 'saida' ? 'Ex: OS-1042 ou Balcão' : 'Ex: NF-e 12048'}
                     className="w-full px-3.5 py-2.5 bg-[#fbf9f5] border border-[#e5dfd4] rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-600 focus:border-amber-600 transition-all font-mono"
                   />
                 </div>
@@ -431,6 +524,21 @@ export default function MovimentacoesPage() {
             )}
           </div>
         </div>
+
+        {/* Modal Importar XML NF-e */}
+        <ImportarNfeModal
+          isOpen={isNfeModalOpen}
+          onClose={() => setIsNfeModalOpen(false)}
+          onImportarItens={handleImportarNfe}
+        />
+
+        {/* Modal Scanner de Código de Barras / Bipagem */}
+        <ScannerCodigoBarrasModal
+          isOpen={isScannerModalOpen}
+          onClose={() => setIsScannerModalOpen(false)}
+          pecas={pecas}
+          onConfirmarBipagem={handleBipagemConfirmada}
+        />
       </main>
     </div>
   );

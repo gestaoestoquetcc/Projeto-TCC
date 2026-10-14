@@ -47,7 +47,7 @@ export default function FornecedoresPage() {
     const pedidosAbertos = fornecedores.reduce((acc, f) => acc + (Number(f.pedidosAbertos) || 0), 0);
     const mediaRating = totalAtivos > 0
       ? (fornecedores.reduce((acc, f) => acc + (Number(f.rating) || 0), 0) / totalAtivos).toFixed(1)
-      : '4.6';
+      : '0.0';
 
     return {
       totalAtivos,
@@ -86,9 +86,10 @@ export default function FornecedoresPage() {
     const num = Math.round(Number(rating) || 0);
     for (let i = 1; i <= 5; i++) {
       stars.push(
-        <span key={i} className={i <= num ? 'text-amber-500' : 'text-gray-300'}>
-          ★
-        </span>
+        <FiStar 
+          key={i} 
+          className={`w-3.5 h-3.5 inline ${i <= num ? 'text-amber-500 fill-amber-500' : 'text-gray-300'}`} 
+        />
       );
     }
     return stars;
@@ -168,7 +169,7 @@ export default function FornecedoresPage() {
             </span>
             <div className="text-3xl font-black tracking-tight text-[#d97706] flex items-center gap-1.5">
               <span>{kpis.mediaRating}</span>
-              <span className="text-2xl text-amber-500">★</span>
+              <FiStar className="w-6 h-6 text-amber-500 fill-amber-500" />
             </div>
           </div>
         </section>

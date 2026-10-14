@@ -1,66 +1,72 @@
-import React, { useState } from 'react';
-import { FiX, FiArrowRight, FiCpu, FiTrendingUp, FiShoppingBag, FiInfo } from 'react-icons/fi';
+import React, { useState, useMemo } from 'react';
+import { FiX, FiArrowRight, FiCheckCircle, FiTrendingUp, FiShoppingBag, FiInfo } from 'react-icons/fi';
 
-export default function AlertasPreditivos({ onGerarPedido, onAbrirDetalheIA }) {
-  const [alertas, setAlertas] = useState([
-    {
-      id: '1',
-      tipo: 'ruptura',
-      badgeLabel: 'RUPTURA',
-      codigo: 'FRE-0142',
-      titulo: 'Pastilha de Freio Traseira EV',
-      descricao: 'Apenas 8 unidades. Risco de desabastecimento em 5 dias com demanda atual.',
-      percentual: 97,
-      acaoLabel: 'Gerar Pedido',
-      detalhes: {
-        categoria: 'Elétrico (EV)',
-        frotaAlvo: 'BYD Dolphin, Song Plus, Ora 03',
-        consumoMedioSemanal: '12 un/sem',
-        projecaoDemanda: 'Pico previsto para próximas 2 semanas devido a revisões de frotistas',
-        sugestaoCompra: 30
-      }
-    },
-    {
-      id: '2',
-      tipo: 'atencao',
-      badgeLabel: 'ATENÇÃO',
-      codigo: 'AMA-0689',
-      titulo: 'Amortecedor Dianteiro EV',
-      descricao: 'Alta de 34% detectada — frota EV crescendo em SP/RJ. Recomenda reforço.',
-      percentual: 89,
-      acaoLabel: 'Ver Previsão',
-      detalhes: {
-        categoria: 'Elétrico (EV)',
-        frotaAlvo: 'Veículos utilitários leves elétricos',
-        consumoMedioSemanal: '6 un/sem',
-        projecaoDemanda: 'Aumento contínuo de 34% em emplacamentos regionais no último trimestre',
-        sugestaoCompra: 18
-      }
-    },
-    {
-      id: '3',
-      tipo: 'previsao',
-      badgeLabel: 'PREVISÃO',
-      codigo: 'INJ-0921',
-      titulo: 'Bico Injetor GDI 4ª Geração',
-      descricao: 'Padrão histórico: +28% no 4º trimestre. Janela de compra preventiva em 12 dias.',
-      percentual: 94,
-      acaoLabel: 'Ver Análise',
-      detalhes: {
-        categoria: 'Combustão',
-        frotaAlvo: 'Motores Turbo GDI (HB20, Tracker, T-Cross)',
-        consumoMedioSemanal: '15 un/sem',
-        projecaoDemanda: 'Sazonalidade de final de ano (manutenções preventivas para viagens de fim de ano)',
-        sugestaoCompra: 45
-      }
-    }
-  ]);
-
+export default function AlertasPreditivos({ pecas = [], onGerarPedido, onAbrirDetalheIA }) {
+  const [dispensados, setDispensados] = useState([]);
   const [modalDetalhe, setModalDetalhe] = useState(null);
+
+  // Gerar alertas dinamicamente a partir das peças reais cadastradas no Supabase
+  const alertas = useMemo(() => {
+    if (!pecas || pecas.length === 0) return [];
+
+    const lista = [];
+
+    // Peças críticas (ruptura)
+    const criticas = pecas.filter(
+      (p) => p.status === 'critico' || p.quantidade <= (p.pontoReposicao || 0)
+    );
+
+    criticas.forEach((p) => {
+      lista.push({
+        id: `alert_crit_${p.id}`,
+        tipo: 'ruptura',
+        badgeLabel: 'RUPTURA',
+        codigo: p.codigo,
+        titulo: p.nome,
+        descricao: `Apenas ${p.quantidade} un. em estoque físico. Ponto de reposição (${p.pontoReposicao}) violado.`,
+        percentual: 96,
+        acaoLabel: 'Gerar Entrada',
+        detalhes: {
+          categoria: p.categoria || p.segmento || 'Geral',
+          frotaAlvo: 'Reposição Prioritária',
+          consumoMedioSemanal: `${Math.max(2, Math.round(p.quantidade * 0.4))} un/sem`,
+          projecaoDemanda: 'Risco de parada de atendimento no balcão por falta de produto.',
+          sugestaoCompra: Math.max(10, (p.pontoReposicao * 2) - p.quantidade)
+        }
+      });
+    });
+
+    // Peças em atenção
+    const emAtencao = pecas.filter(
+      (p) => p.status === 'atencao' && !criticas.some((c) => c.id === p.id)
+    );
+
+    emAtencao.forEach((p) => {
+      lista.push({
+        id: `alert_atenc_${p.id}`,
+        tipo: 'atencao',
+        badgeLabel: 'ATENÇÃO',
+        codigo: p.codigo,
+        titulo: p.nome,
+        descricao: `Saldo de ${p.quantidade} un. Próximo ao estoque mínimo de segurança (${p.pontoReposicao}).`,
+        percentual: 85,
+        acaoLabel: 'Ver Estoque',
+        detalhes: {
+          categoria: p.categoria || p.segmento || 'Geral',
+          frotaAlvo: 'Demanda Regular',
+          consumoMedioSemanal: `${Math.max(1, Math.round(p.quantidade * 0.2))} un/sem`,
+          projecaoDemanda: 'Curva de giro indica necessidade de reabastecimento preventivo nos próximos dias.',
+          sugestaoCompra: Math.max(5, p.pontoReposicao - p.quantidade + 10)
+        }
+      });
+    });
+
+    return lista.filter((a) => !dispensados.includes(a.id));
+  }, [pecas, dispensados]);
 
   const handleDismiss = (id, e) => {
     e.stopPropagation();
-    setAlertas((prev) => prev.filter((a) => a.id !== id));
+    setDispensados((prev) => [...prev, id]);
   };
 
   const handleAcaoClick = (alerta) => {
@@ -84,6 +90,7 @@ export default function AlertasPreditivos({ onGerarPedido, onAbrirDetalheIA }) {
           btn: 'border-[#fca5a5] text-[#dc2626] hover:bg-[#fee2e2]'
         };
       case 'atencao':
+      default:
         return {
           cardBg: 'bg-[#fefcf6] hover:bg-[#fcf8ed]',
           border: 'border-[#faecc8]',
@@ -92,104 +99,108 @@ export default function AlertasPreditivos({ onGerarPedido, onAbrirDetalheIA }) {
           progressText: 'text-[#d97706]',
           btn: 'border-[#fcd34d] text-[#d97706] hover:bg-[#fef3c7]'
         };
-      case 'previsao':
-      default:
-        return {
-          cardBg: 'bg-[#f4faf8] hover:bg-[#eef8f5]',
-          border: 'border-[#ccefe6]',
-          badge: 'bg-[#ccfbf1] text-[#0d9488] border border-[#99f6e4]',
-          progress: 'bg-[#0d9488]',
-          progressText: 'text-[#0d9488]',
-          btn: 'border-[#5eead4] text-[#0d9488] hover:bg-[#ccfbf1]'
-        };
     }
   };
 
   return (
     <section className="mb-8">
       {/* Header da Seção */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
           <span className="text-[11px] font-mono tracking-widest text-[#a89e90] uppercase font-bold">
-            Alertas Preditivos
+            Alertas Preditivos de Estoque
           </span>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-[#e6f7f3] text-[#0d9488] border border-[#bbf0e4]">
-            <FiCpu className="w-3 h-3 text-[#0d9488]" />
-            {alertas.length} ativos
-          </span>
+          {alertas.length > 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
+              {alertas.length} {alertas.length === 1 ? 'pendência' : 'pendências'}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Grid de Alertas */}
       {alertas.length === 0 ? (
-        <div className="bg-white/80 border border-[#e5dfd4] rounded-xl p-8 text-center">
-          <p className="text-xs text-gray-500 font-medium">
-            Nenhum alerta preditivo pendente no momento. Todos os estoques operam dentro dos parâmetros da IA.
-          </p>
+        <div className="p-5 bg-white border border-[#e5dfd4] rounded-xl flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <FiCheckCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-gray-900">Nenhum risco de ruptura detectado</h4>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Todos os itens no inventário estão operando dentro da margem de segurança configurada.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded">
+            Estoque 100% Regular
+          </span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {alertas.map((alerta) => {
-            const styles = getAlertStyles(alerta.tipo);
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {alertas.map((item) => {
+            const styles = getAlertStyles(item.tipo);
 
             return (
               <div
-                key={alerta.id}
-                className={`${styles.cardBg} border ${styles.border} rounded-xl p-5 flex flex-col justify-between shadow-xs transition-all relative group`}
+                key={item.id}
+                onClick={() => setModalDetalhe(item)}
+                className={`border rounded-xl p-4 transition-all relative flex flex-col justify-between cursor-pointer group shadow-2xs ${styles.cardBg} ${styles.border}`}
               >
-                {/* Header do Card */}
+                {/* Botão de Fechar / Descartar */}
+                <button
+                  type="button"
+                  onClick={(e) => handleDismiss(item.id, e)}
+                  title="Dispensar alerta"
+                  className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-black/5 transition-colors"
+                >
+                  <FiX className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Conteúdo Superior */}
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${styles.badge}`}>
-                        {alerta.badgeLabel}
-                      </span>
-                      <span className="text-[11px] font-mono text-gray-400 font-semibold">
-                        {alerta.codigo}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleDismiss(alerta.id, e)}
-                      className="text-gray-300 hover:text-gray-600 p-1 rounded-md transition-colors"
-                      title="Dispensar alerta"
-                    >
-                      <FiX className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <h3 className="font-bold text-sm text-gray-900 tracking-tight leading-snug mb-2">
-                    {alerta.titulo}
-                  </h3>
-
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    {alerta.descricao}
-                  </p>
-                </div>
-
-                {/* Footer do Card com Barra de Risco e Ação */}
-                <div className="mt-5 pt-3 border-t border-black/5 flex items-center justify-between gap-3">
-                  {/* Barra e Percentual */}
-                  <div className="flex items-center gap-2 flex-1">
-                    <div className="flex-1 h-1 bg-black/10 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${styles.progress}`}
-                        style={{ width: `${alerta.percentual}%` }}
-                      />
-                    </div>
-                    <span className={`text-[11px] font-mono font-bold ${styles.progressText}`}>
-                      {alerta.percentual}%
+                  <div className="flex items-center gap-2 mb-2 pr-6">
+                    <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider ${styles.badge}`}>
+                      {item.badgeLabel}
+                    </span>
+                    <span className="text-xs font-mono font-semibold text-gray-500">
+                      {item.codigo}
                     </span>
                   </div>
 
-                  {/* Botão de Ação */}
+                  <h3 className="font-bold text-sm text-gray-900 tracking-tight leading-snug group-hover:text-amber-950 transition-colors">
+                    {item.titulo}
+                  </h3>
+
+                  <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                    {item.descricao}
+                  </p>
+                </div>
+
+                {/* Barra de Risco & Botão de Ação */}
+                <div className="mt-4 pt-3 border-t border-black/5 flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between text-[10px] font-bold mb-1">
+                      <span className="text-gray-500 font-mono">RISCO</span>
+                      <span className={styles.progressText}>{item.percentual}%</span>
+                    </div>
+                    <div className="h-1 bg-black/5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${styles.progress}`}
+                        style={{ width: `${item.percentual}%` }}
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => handleAcaoClick(alerta)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border transition-colors bg-white/70 shadow-2xs ${styles.btn}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAcaoClick(item);
+                    }}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg border bg-white shadow-2xs hover:shadow transition-all shrink-0 flex items-center gap-1 ${styles.btn}`}
                   >
-                    <span>{alerta.acaoLabel}</span>
+                    <span>{item.acaoLabel}</span>
                     <FiArrowRight className="w-3 h-3" />
                   </button>
                 </div>
@@ -199,66 +210,61 @@ export default function AlertasPreditivos({ onGerarPedido, onAbrirDetalheIA }) {
         </div>
       )}
 
-      {/* Modal de Detalhes da IA */}
+      {/* Modal de Detalhes do Alerta */}
       {modalDetalhe && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity" 
-            onClick={() => setModalDetalhe(null)} 
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-2xs transition-opacity"
+            onClick={() => setModalDetalhe(null)}
           />
 
-          <div className="relative bg-[#fcfbfa] border border-[#e5dfd5] w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden z-10 p-6 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-4 border-b border-[#ece7de]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
-                  <FiCpu className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-gray-900">Análise do Motor de IA</h3>
-                  <span className="text-xs text-gray-500 font-mono">{modalDetalhe.codigo} · {modalDetalhe.titulo}</span>
-                </div>
+          <div className="relative bg-white border border-[#e5dfd4] rounded-2xl max-w-lg w-full p-6 shadow-2xl z-10 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between pb-4 border-b border-gray-100">
+              <div>
+                <span className="text-[10px] font-mono tracking-widest text-amber-700 uppercase font-bold">
+                  Diagnóstico da Peça
+                </span>
+                <h3 className="text-base font-bold text-gray-900 mt-0.5">
+                  {modalDetalhe.titulo}
+                </h3>
+                <span className="text-xs font-mono text-gray-500">
+                  SKU: {modalDetalhe.codigo}
+                </span>
               </div>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setModalDetalhe(null)}
-                className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100"
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
               >
                 <FiX className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="py-4 space-y-4 text-xs">
-              <div className="p-3 bg-teal-50/50 rounded-xl border border-teal-100 space-y-1">
-                <span className="font-bold text-teal-900 block">Diagnóstico Preditivo</span>
-                <p className="text-teal-800 leading-relaxed">{modalDetalhe.descricao}</p>
+            <div className="py-4 space-y-3 text-xs text-gray-700">
+              <div className="p-3 bg-gray-50 rounded-xl space-y-1.5 border border-gray-100">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Categoria:</span>
+                  <span className="font-semibold text-gray-900">{modalDetalhe.detalhes.categoria}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Consumo Estimado:</span>
+                  <span className="font-semibold text-gray-900">{modalDetalhe.detalhes.consumoMedioSemanal}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Sugestão de Reposição:</span>
+                  <span className="font-bold text-amber-800">{modalDetalhe.detalhes.sugestaoCompra} unidades</span>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-white rounded-lg border border-[#e5dfd4]">
-                  <span className="text-gray-400 block font-mono text-[10px] uppercase">Confiança do Modelo</span>
-                  <span className="text-base font-black text-gray-900">{modalDetalhe.percentual}%</span>
-                </div>
-                <div className="p-3 bg-white rounded-lg border border-[#e5dfd4]">
-                  <span className="text-gray-400 block font-mono text-[10px] uppercase">Consumo Médio</span>
-                  <span className="text-base font-black text-gray-900">{modalDetalhe.detalhes?.consumoMedioSemanal || 'N/A'}</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-white rounded-lg border border-[#e5dfd4] space-y-1">
-                <span className="text-gray-400 block font-mono text-[10px] uppercase">Frota e Tendência</span>
-                <p className="text-gray-700 font-medium">{modalDetalhe.detalhes?.projecaoDemanda}</p>
-              </div>
-
-              <div className="p-3 bg-amber-50/60 rounded-lg border border-amber-200 flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold text-amber-900 block">Sugestão de Reposição</span>
-                  <span className="text-xs text-amber-700">Lote ideal calculado pela IA</span>
-                </div>
-                <span className="text-lg font-black text-amber-800">{modalDetalhe.detalhes?.sugestaoCompra} un.</span>
+              <div>
+                <span className="font-semibold text-gray-900 block mb-1">Motivo do Alerta:</span>
+                <p className="text-gray-600 leading-relaxed bg-[#fbf9f5] p-3 rounded-xl border border-[#ece7de]">
+                  {modalDetalhe.detalhes.projecaoDemanda}
+                </p>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-[#ece7de] flex justify-end gap-2">
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setModalDetalhe(null)}
@@ -266,19 +272,18 @@ export default function AlertasPreditivos({ onGerarPedido, onAbrirDetalheIA }) {
               >
                 Fechar
               </button>
-              {onGerarPedido && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const item = modalDetalhe;
-                    setModalDetalhe(null);
-                    onGerarPedido(item);
-                  }}
-                  className="px-4 py-2 text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 rounded-lg transition-colors shadow-xs"
-                >
-                  Confirmar Reposição
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const alertItem = modalDetalhe;
+                  setModalDetalhe(null);
+                  if (onGerarPedido) onGerarPedido(alertItem);
+                }}
+                className="px-4 py-2 text-xs font-bold bg-[#c8672b] hover:bg-[#b0561e] text-white rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+              >
+                <FiShoppingBag className="w-3.5 h-3.5" />
+                Registrar Movimentação
+              </button>
             </div>
           </div>
         </div>

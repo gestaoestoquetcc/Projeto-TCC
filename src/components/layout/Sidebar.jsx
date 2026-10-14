@@ -8,17 +8,40 @@ import {
   FiTruck, 
   FiSettings, 
   FiSun,
-  FiMoon
+  FiMoon,
+  FiLogOut
 } from 'react-icons/fi';
-import { RiShieldFlashFill } from 'react-icons/ri';
+import { useAuth } from '../../contexts/AuthContext';
+import NotificacoesDropdown from './NotificacoesDropdown';
+
+function AutoStockLogoMark() {
+  return (
+    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#c8672b] to-[#994717] flex items-center justify-center text-white shadow-md shadow-amber-950/40 shrink-0">
+      <svg 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2.2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        className="w-5 h-5 text-white"
+      >
+        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+        <path d="M2 17l10 5 10-5" />
+        <path d="M2 12l10 5 10-5" />
+      </svg>
+    </div>
+  );
+}
 
 export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleDark }) {
   const navigate = useNavigate();
+  const { user, perfil, signOut } = useAuth();
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: FiGrid, path: '/' },
-    { id: 'pecas', label: 'Peças', icon: FiLayers, path: '/pecas' },
-    { id: 'previsao', label: 'Previsão IA', icon: FiTrendingUp, path: '/previsao', badge: 'LIVE' },
+    { id: 'pecas', label: 'Peças & Itens', icon: FiLayers, path: '/pecas' },
+    { id: 'previsao', label: 'Previsão de Demanda', icon: FiTrendingUp, path: '/previsao' },
     { id: 'movimentacao', label: 'Entrada/Saída', icon: FiRepeat, path: '/movimentacao' },
     { id: 'fornecedores', label: 'Fornecedores', icon: FiTruck, path: '/fornecedores' },
     { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/configuracoes' },
@@ -28,16 +51,17 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
     <aside className="w-64 bg-[#0d1117] text-gray-300 flex flex-col justify-between shrink-0 min-h-screen border-r border-[#1e2430]">
       {/* Top Header */}
       <div>
-        <div className="flex items-center gap-3 px-6 py-6 border-b border-[#1b222d]/60">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white shadow-md shadow-amber-900/30">
-            <RiShieldFlashFill className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between px-5 py-5 border-b border-[#1b222d]/60">
+          <div className="flex items-center gap-3">
+            <AutoStockLogoMark />
+            <div>
+              <h1 className="font-bold text-white text-base tracking-tight leading-none">AutoStock</h1>
+              <span className="text-[10px] text-amber-500/80 font-mono tracking-widest uppercase block mt-1">
+                Distribuidor Pro
+              </span>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-white text-base tracking-tight leading-none">AutoStock</h1>
-            <span className="text-[10px] text-amber-500/80 font-mono tracking-widest uppercase block mt-1">
-              Distribuidor Pro
-            </span>
-          </div>
+          <NotificacoesDropdown />
         </div>
 
         {/* Modules Section */}
@@ -108,14 +132,38 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
         </div>
 
         {/* User Card */}
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-[#161b22]/70 border border-[#21262d]/50">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center text-white font-semibold text-xs tracking-wider shadow-sm">
-            AT
+        <div className="flex items-center justify-between p-2 rounded-lg bg-[#161b22]/70 border border-[#21262d]/50 group">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center text-white font-semibold text-xs tracking-wider shadow-sm shrink-0">
+              {perfil?.avatar_iniciais || 'AT'}
+            </div>
+            <div className="overflow-hidden">
+              <h4 className="text-xs font-semibold text-gray-200 truncate">
+                {perfil?.nome || 'Arthur Teste'}
+              </h4>
+              <p className="text-[11px] text-gray-500 truncate">
+                {perfil?.cargo || 'Gerente de Estoque'}
+              </p>
+            </div>
           </div>
-          <div className="overflow-hidden">
-            <h4 className="text-xs font-semibold text-gray-200 truncate">Arthur Teste</h4>
-            <p className="text-[11px] text-gray-500 truncate">Gerente de Estoque</p>
-          </div>
+
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await signOut();
+              } catch (err) {
+                console.warn('Erro ao encerrar sessão:', err);
+              } finally {
+                navigate('/login', { replace: true });
+              }
+            }}
+            title="Encerrar sessão e sair"
+            aria-label="Encerrar sessão"
+            className="p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-[#21262d] transition-colors shrink-0 cursor-pointer"
+          >
+            <FiLogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </aside>

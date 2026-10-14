@@ -1,19 +1,78 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 
-export default function GraficoSaidas() {
+export default function GraficoSaidas({ movimentacoes = [], pecas = [] }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
 
-  // Dados dos últimos 6 meses
-  const dados = [
-    { mes: 'Abr', combustao: 370, eletrico: 160, motos: 140 },
-    { mes: 'Mai', combustao: 385, eletrico: 180, motos: 135 },
-    { mes: 'Jun', combustao: 420, eletrico: 210, motos: 130 },
-    { mes: 'Jul', combustao: 440, eletrico: 235, motos: 125 },
-    { mes: 'Ago', combustao: 435, eletrico: 260, motos: 130 },
-    { mes: 'Set', combustao: 490, eletrico: 310, motos: 145 },
-  ];
+  // Mapa de ID da peça -> segmento
+  const pecasSegmentoMap = useMemo(() => {
+    const map = {};
+    pecas.forEach((p) => {
+      map[p.id] = p.segmento || 'combustao';
+    });
+    return map;
+  }, [pecas]);
 
-  const maxVal = 600;
+  // Montar dinamicamente os últimos 6 meses a partir da data atual
+  const dados = useMemo(() => {
+    const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const hoje = new Date();
+    const meses = [];
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const ano = d.getFullYear();
+      const mesNum = d.getMonth();
+      const mesChave = `${ano}-${String(mesNum + 1).padStart(2, '0')}`;
+      meses.push({
+        mesChave,
+        mes: mesesNomes[mesNum],
+        ano,
+        combustao: 0,
+        eletrico: 0,
+        motos: 0
+      });
+    }
+
+    // Contabilizar saídas reais a partir das movimentações
+    (movimentacoes || []).forEach((m) => {
+      if (m.tipo === 'saida' && m.dataHora) {
+        const d = new Date(m.dataHora);
+        const anoMes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const slot = meses.find((item) => item.mesChave === anoMes);
+        if (slot) {
+          const seg = (m.pecaId && pecasSegmentoMap[m.pecaId]) || m.segmento || 'combustao';
+          const qtd = Number(m.quantidade) || 1;
+          if (seg === 'eletrico') {
+            slot.eletrico += qtd;
+          } else if (seg === 'motos' || seg === 'moto') {
+            slot.motos += qtd;
+          } else {
+            slot.combustao += qtd;
+          }
+        }
+      }
+    });
+
+    return meses;
+  }, [movimentacoes, pecasSegmentoMap]);
+
+  // Verificar se há saídas registradas no período
+  const totalSaidasGeral = useMemo(() => {
+    return dados.reduce((acc, d) => acc + d.combustao + d.eletrico + d.motos, 0);
+  }, [dados]);
+
+  // Calcular escala máxima dinâmica do gráfico
+  const maxVal = useMemo(() => {
+    let max = 0;
+    dados.forEach((d) => {
+      if (d.combustao > max) max = d.combustao;
+      if (d.eletrico > max) max = d.eletrico;
+      if (d.motos > max) max = d.motos;
+    });
+    if (max === 0) return 50;
+    return Math.max(20, Math.ceil((max * 1.3) / 10) * 10);
+  }, [dados]);
+
   const width = 800;
   const height = 240;
   const paddingX = 40;
@@ -57,7 +116,10 @@ export default function GraficoSaidas() {
     return `${linePath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
   };
 
-  const yTicks = [0, 150, 300, 450, 600];
+  const yTicks = useMemo(() => {
+    const step = Math.round(maxVal / 4);
+    return [0, step, step * 2, step * 3, maxVal];
+  }, [maxVal]);
 
   return (
     <div className="bg-white/90 border border-[#e5dfd4] rounded-xl p-6 shadow-xs">
@@ -67,8 +129,13 @@ export default function GraficoSaidas() {
           <span className="text-[11px] font-mono tracking-widest text-[#a89e90] uppercase font-bold block mb-1">
             Saídas por Segmento
           </span>
-          <h2 className="text-base font-bold text-gray-900">
-            Últimos 6 meses · unidades
+          <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+            Últimos 6 meses · unidades reais
+            {totalSaidasGeral === 0 && (
+              <span className="text-[11px] font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                Sem baixas no período
+              </span>
+            )}
           </h2>
         </div>
 
@@ -173,7 +240,7 @@ export default function GraficoSaidas() {
             const isHovered = hoveredIndex === i;
 
             return (
-              <g key={d.mes}>
+              <g key={`${d.mes}-${d.ano}`}>
                 {/* Linha vertical no hover */}
                 {isHovered && (
                   <line
@@ -235,7 +302,7 @@ export default function GraficoSaidas() {
             }}
           >
             <div className="font-mono text-[10px] text-gray-400 uppercase tracking-widest mb-1.5 font-bold">
-              Mês: {dados[hoveredIndex].mes} / 2026
+              Mês: {dados[hoveredIndex].mes} / {dados[hoveredIndex].ano}
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-4">

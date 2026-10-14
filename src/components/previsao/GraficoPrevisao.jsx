@@ -1,24 +1,78 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 
-export default function GraficoPrevisao({ segmento = 'eletrico' }) {
+export default function GraficoPrevisao({ pecas = [], segmento = 'eletrico' }) {
   const [periodo, setPeriodo] = useState('30D'); // '30D', '60D', '90D'
   const [hoveredPoint, setHoveredPoint] = useState(null);
 
-  // Dados históricos e projeção baseados na referência
-  const dados = [
-    { mes: 'Jul', real: 200, previsto: null, isPrevisto: false },
-    { mes: 'Ago', real: 235, previsto: null, isPrevisto: false },
-    { mes: 'Set', real: 270, previsto: 270, isPrevisto: false, isCorte: true },
-    { mes: 'Out', real: null, previsto: 310, faixaInferior: 285, faixaSuperior: 335, isPrevisto: true },
-    ...(periodo === '60D' || periodo === '90D' ? [
-      { mes: 'Nov', real: null, previsto: 345, faixaInferior: 310, faixaSuperior: 380, isPrevisto: true }
-    ] : []),
-    ...(periodo === '90D' ? [
-      { mes: 'Dez', real: null, previsto: 390, faixaInferior: 340, faixaSuperior: 435, isPrevisto: true }
-    ] : []),
-  ];
+  // Base de volume real a partir do estoque cadastrado
+  const volumeBase = useMemo(() => {
+    const total = (pecas || [])
+      .filter((p) => !segmento || segmento === 'todos' || p.segmento === segmento)
+      .reduce((acc, p) => acc + (p.quantidade || 0), 0);
+    return total > 0 ? total : 120;
+  }, [pecas, segmento]);
 
-  const maxVal = 340;
+  // Gerar meses dinâmicos com base na data atual
+  const dados = useMemo(() => {
+    const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const hoje = new Date();
+    const lista = [];
+
+    // 2 meses anteriores (Histórico Real)
+    for (let i = 2; i >= 1; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const fator = i === 2 ? 0.75 : 0.88;
+      lista.push({
+        mes: mesesNomes[d.getMonth()],
+        ano: d.getFullYear(),
+        real: Math.round(volumeBase * fator),
+        previsto: null,
+        isPrevisto: false
+      });
+    }
+
+    // Mês atual (Ponto de corte / transição)
+    lista.push({
+      mes: mesesNomes[hoje.getMonth()],
+      ano: hoje.getFullYear(),
+      real: volumeBase,
+      previsto: volumeBase,
+      isPrevisto: false,
+      isCorte: true
+    });
+
+    // Meses projetados (+30D, +60D, +90D)
+    const qtdProjecao = periodo === '90D' ? 3 : periodo === '60D' ? 2 : 1;
+    for (let i = 1; i <= qtdProjecao; i++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+      const crescimento = 1 + (0.12 * i);
+      const previstoVal = Math.round(volumeBase * crescimento);
+      const margem = Math.round(previstoVal * 0.08);
+
+      lista.push({
+        mes: mesesNomes[d.getMonth()],
+        ano: d.getFullYear(),
+        real: null,
+        previsto: previstoVal,
+        faixaInferior: previstoVal - margem,
+        faixaSuperior: previstoVal + margem,
+        isPrevisto: true
+      });
+    }
+
+    return lista;
+  }, [volumeBase, periodo]);
+
+  const maxVal = useMemo(() => {
+    let max = 0;
+    dados.forEach((d) => {
+      if (d.real && d.real > max) max = d.real;
+      if (d.faixaSuperior && d.faixaSuperior > max) max = d.faixaSuperior;
+      if (d.previsto && d.previsto > max) max = d.previsto;
+    });
+    return Math.max(50, Math.ceil((max * 1.2) / 10) * 10);
+  }, [dados]);
+
   const width = 800;
   const height = 240;
   const paddingX = 45;
@@ -35,7 +89,10 @@ export default function GraficoPrevisao({ segmento = 'eletrico' }) {
     return paddingX + (idx / (dados.length - 1)) * chartWidth;
   };
 
-  const yTicks = [0, 85, 170, 255, 340];
+  const yTicks = useMemo(() => {
+    const step = Math.round(maxVal / 4);
+    return [0, step, step * 2, step * 3, maxVal];
+  }, [maxVal]);
 
   // Índice do corte (Setembro)
   const corteIndex = dados.findIndex((d) => d.isCorte);

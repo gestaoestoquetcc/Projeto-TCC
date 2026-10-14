@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiRefreshCw } from 'react-icons/fi';
 
@@ -7,43 +7,68 @@ import MetricCard from '../../components/dashboard/MetricCard';
 import GraficoPrevisao from '../../components/previsao/GraficoPrevisao';
 import SugestoesCompra from '../../components/previsao/SugestoesCompra';
 import SimuladorParametros from '../../components/previsao/SimuladorParametros';
+import { getPecas } from '../../services/pecasService';
 
 export default function PrevisaoPage() {
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(false);
+  const [pecas, setPecas] = useState([]);
   const [kpis, setKpis] = useState({
     precisao: '94.2%',
-    sugestoesAtivas: 4,
-    economia: 'R$ 12.400',
-    demandaEV: '+27%'
+    sugestoesAtivas: 0,
+    economia: 'R$ 0',
+    demandaEV: '+24%'
   });
-  const [modeloStatus, setModeloStatus] = useState('modelo v3.2 · atualizado agora');
+  const [modeloStatus, setModeloStatus] = useState('modelo v3.2 · atualizado');
+
+  const carregarPecas = async () => {
+    try {
+      const data = await getPecas();
+      setPecas(data);
+      const criticas = data.filter((p) => p.status === 'critico' || p.status === 'atencao' || p.quantidade <= p.pontoReposicao);
+      const economiaTotal = criticas.reduce((acc, p) => acc + (p.pontoReposicao * (p.precoVenda ? p.precoVenda * 0.15 : 20)), 0);
+
+      setKpis((prev) => ({
+        ...prev,
+        sugestoesAtivas: criticas.length,
+        economia: economiaTotal > 0 ? economiaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0'
+      }));
+    } catch (err) {
+      console.warn('Erro ao carregar dados na previsão:', err);
+    }
+  };
+
+  useEffect(() => {
+    carregarPecas();
+  }, []);
 
   const handleAplicarParametros = ({ modo, bufferSeguranca, crescimentoFrotaEV }) => {
     // Atualizar dinamicamente os indicadores de acordo com a estratégia simulada
+    const baseSugestoes = pecas.filter((p) => p.status === 'critico' || p.status === 'atencao' || p.quantidade <= p.pontoReposicao).length;
+
     if (modo === 'conservador') {
-      setKpis({
+      setKpis((prev) => ({
+        ...prev,
         precisao: '92.8%',
-        sugestoesAtivas: 3,
-        economia: 'R$ 15.800',
+        sugestoesAtivas: Math.max(0, baseSugestoes - 1),
         demandaEV: `+${Math.round(crescimentoFrotaEV * 0.8)}%`
-      });
+      }));
       setModeloStatus('modelo v3.2 · perfil conservador');
     } else if (modo === 'agressivo') {
-      setKpis({
+      setKpis((prev) => ({
+        ...prev,
         precisao: '96.1%',
-        sugestoesAtivas: 6,
-        economia: 'R$ 9.200',
+        sugestoesAtivas: baseSugestoes + 2,
         demandaEV: `+${Math.round(crescimentoFrotaEV * 1.2)}%`
-      });
+      }));
       setModeloStatus('modelo v3.2 · perfil agressivo (zero ruptura)');
     } else {
-      setKpis({
+      setKpis((prev) => ({
+        ...prev,
         precisao: '94.2%',
-        sugestoesAtivas: 4,
-        economia: 'R$ 12.400',
+        sugestoesAtivas: baseSugestoes,
         demandaEV: `+${crescimentoFrotaEV}%`
-      });
+      }));
       setModeloStatus('modelo v3.2 · perfil equilibrado');
     }
   };
@@ -131,7 +156,7 @@ export default function PrevisaoPage() {
 
         {/* Gráfico de Previsão de Demanda (Segmento Elétrico) */}
         <section className="mb-8">
-          <GraficoPrevisao segmento="eletrico" />
+          <GraficoPrevisao pecas={pecas} segmento="eletrico" />
         </section>
 
         {/* [ROBUSTEZ TCC] Simulador de Sensibilidade da IA */}
