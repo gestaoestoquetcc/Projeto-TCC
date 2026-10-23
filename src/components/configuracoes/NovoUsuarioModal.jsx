@@ -112,6 +112,7 @@ export default function NovoUsuarioModal({ isOpen, onClose, onSalvar }) {
 
     try {
       setSalvando(true);
+      setErrors((prev) => ({ ...prev, submit: '' }));
       await onSalvar({
         nome: nome.trim(),
         email: email.trim().toLowerCase(),
@@ -129,6 +130,7 @@ export default function NovoUsuarioModal({ isOpen, onClose, onSalvar }) {
       setSenha('AutoStock@2026');
     } catch (err) {
       console.error('Erro ao salvar usuário:', err);
+      setErrors((prev) => ({ ...prev, submit: err.message || 'Erro ao cadastrar colaborador.' }));
     } finally {
       setSalvando(false);
     }
@@ -165,6 +167,13 @@ export default function NovoUsuarioModal({ isOpen, onClose, onSalvar }) {
         {/* Formulário Estruturado */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto text-slate-800">
           
+          {errors.submit && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-start gap-2">
+              <FiX className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <span>{errors.submit}</span>
+            </div>
+          )}
+
           {/* SEÇÃO 1: DADOS CADASTRAIS */}
           <div>
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">

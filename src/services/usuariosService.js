@@ -1,6 +1,19 @@
+import { createClient } from '@supabase/supabase-js';
 import { supabase } from '../utils/SupaBase';
 
-const STORAGE_KEY = 'autostock_usuarios_sistema';
+// Cliente secundário isolado (sem persistir sessão) para permitir que o Dono da Loja (Master)
+// crie contas de funcionários no Supabase Auth sem deslogar sua própria sessão de administrador.
+const secondaryAuthClient = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
+  }
+);
 
 /**
  * Busca a lista de usuários reais cadastrados no Supabase (tabela perfis)
@@ -17,8 +30,8 @@ export async function getUsuarios() {
       return data.map((p) => ({
         id: p.id,
         nome: p.nome,
-        email: p.email || `${p.nome?.toLowerCase().replace(/\s+/g, '.') || 'usuario'}@autostock.com.br`,
-        cargo: p.cargo || 'Operador',
+        email: p.email || (p.role === 'master' ? 'dono@autostock.com.br' : 'colaborador@autostock.com.br'),
+        cargo: p.cargo || 'Operador de Almoxarifado',
         role: p.role || (p.cargo?.toLowerCase().includes('master') ? 'master' : 'operador'),
         avatar_iniciais: p.avatar_iniciais || p.nome?.substring(0, 2).toUpperCase() || 'US',
         ativo: p.ativo !== false,
@@ -37,22 +50,22 @@ export async function getUsuarios() {
     console.warn('Erro ao consultar perfis do Supabase:', err);
   }
 
-  // Fallback para usuários cadastrados localmente
-  try {
-    const salvo = localStorage.getItem(STORAGE_KEY);
-    if (salvo) return JSON.parse(salvo);
-  } catch {
-    // ignore
-  }
-
   return [];
 }
 
 /**
- * Cadastra um novo usuário
+ * Cadastra um novo funcionário/colaborador no sistema:
+ * 1. Cria a conta no Supabase Auth com email e senha providenciados pelo Dono da Loja
+ * 2. Grava os dados na tabela public.perfis (nome, cargo, role, permissões, ativo)
+ * 3. O colaborador passa a conseguir logar imediatamente no sistema com suas credenciais
  */
 export async function criarUsuario(usuarioData) {
   const nome = usuarioData.nome.trim();
+  const email = usuarioData.email.trim().toLowerCase();
+  const senha = usuarioData.senha || 'AutoStock@2026';
+  const cargo = usuarioData.cargo.trim() || 'Operador de Almoxarifado';
+  const role = usuarioData.role || 'operador';
+
   const iniciais = nome
     .split(' ')
     .map((n) => n[0])
@@ -60,81 +73,103 @@ export async function criarUsuario(usuarioData) {
     .join('')
     .toUpperCase() || 'NV';
 
-  const novoUsuario = {
-    id: `usr_${Date.now()}`,
-    nome,
-    email: usuarioData.email.trim(),
-    cargo: usuarioData.cargo.trim() || 'Operador de Almoxarifado',
-    role: usuarioData.role || 'operador',
-    avatar_iniciais: iniciais,
-    ativo: true,
-    dataCriacao: new Date().toLocaleDateString('pt-BR'),
-    permissoes: usuarioData.permissoes || {
-      dashboard: true,
-      pecas: true,
-      movimentacao: true,
-      previsao: usuarioData.role === 'master' || usuarioData.role === 'gerente',
-      fornecedores: usuarioData.role === 'master' || usuarioData.role === 'gerente',
-      usuarios: usuarioData.role === 'master'
-    }
+  const permissoes = usuarioData.permissoes || {
+    dashboard: true,
+    pecas: true,
+    movimentacao: true,
+    previsao: role === 'master' || role === 'gerente',
+    fornecedores: role === 'master' || role === 'gerente',
+    usuarios: role === 'master'
   };
 
-  // Tentar cadastrar no Supabase (tabela perfis)
-  try {
-    const { data, error } = await supabase
-      .from('perfis')
-      .insert([{
-        nome: novoUsuario.nome,
-        cargo: novoUsuario.cargo,
-        role: novoUsuario.role,
-        avatar_iniciais: novoUsuario.avatar_iniciais,
-        ativo: novoUsuario.ativo,
-        permissoes: novoUsuario.permissoes
-      }])
-      .select();
-
-    if (!error && data && data.length > 0) {
-      novoUsuario.id = data[0].id;
+  // 1. Criar usuário no Supabase Auth via cliente secundário
+  const { data: authData, error: authError } = await secondaryAuthClient.auth.signUp({
+    email,
+    password: senha,
+    options: {
+      data: {
+        nome,
+        cargo,
+        role,
+        permissoes
+      }
     }
-  } catch (err) {
-    console.warn('Não foi possível gravar perfil no Supabase, salvando localmente:', err);
+  });
+
+  if (authError) {
+    if (authError.message?.includes('User already registered')) {
+      throw new Error(`O e-mail ${email} já possui cadastro no sistema.`);
+    }
+    if (authError.message?.includes('confirmation email') || authError.status === 500) {
+      throw new Error(
+        'Aviso do Supabase: Limite de envio de e-mails de confirmação atingido. ' +
+        'Para cadastrar colaboradores diretamente, desmarque a opção "Confirm email" em Authentication -> Providers -> Email no painel do Supabase.'
+      );
+    }
+    throw authError;
   }
 
-  try {
-    const listaAtual = await getUsuarios();
-    const atualizada = [novoUsuario, ...listaAtual.filter((u) => u.id !== novoUsuario.id)];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(atualizada));
-  } catch (err) {
-    console.error('Erro ao salvar localmente:', err);
+  // No Supabase Auth, quando um e-mail já está em uso, a API retorna identities vazio ([])
+  // para evitar enumeração pública de e-mails, sem criar novo registro no auth.users.
+  if (authData?.user && (!authData.user.identities || authData.user.identities.length === 0)) {
+    throw new Error(
+      `O e-mail "${email}" já está cadastrado no sistema (é o e-mail de um administrador ou colaborador já existente). ` +
+      `Para cadastrar um novo colaborador, informe um e-mail diferente.`
+    );
   }
 
-  return novoUsuario;
+  const userId = authData?.user?.id;
+  if (!userId) {
+    throw new Error('Não foi possível gerar a credencial do usuário no Supabase Auth.');
+  }
+
+  // 2. Gravar os dados completos na tabela public.perfis
+  const payloadPerfil = {
+    id: userId,
+    nome,
+    email,
+    cargo,
+    role,
+    avatar_iniciais: iniciais,
+    ativo: true,
+    permissoes
+  };
+
+  const { error: perfilError } = await supabase
+    .from('perfis')
+    .upsert(payloadPerfil);
+
+  if (perfilError) {
+    console.error('Erro ao salvar perfil no Supabase:', perfilError);
+    throw new Error(`Conta criada no Auth, mas erro ao salvar na tabela perfis: ${perfilError.message}`);
+  }
+
+  return {
+    id: userId,
+    ...payloadPerfil,
+    dataCriacao: new Date().toLocaleDateString('pt-BR')
+  };
 }
 
 /**
- * Atualiza os dados de um usuário
+ * Atualiza os dados de um usuário na tabela public.perfis
  */
 export async function atualizarUsuario(id, updates) {
-  try {
-    await supabase
-      .from('perfis')
-      .update({
-        cargo: updates.cargo,
-        role: updates.role,
-        ativo: updates.ativo,
-        permissoes: updates.permissoes
-      })
-      .eq('id', id);
-  } catch (err) {
-    console.warn('Erro ao atualizar perfil no Supabase:', err);
+  const { error } = await supabase
+    .from('perfis')
+    .update({
+      cargo: updates.cargo,
+      role: updates.role,
+      ativo: updates.ativo,
+      permissoes: updates.permissoes
+    })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Erro ao atualizar perfil no Supabase:', error);
+    throw error;
   }
 
-  try {
-    const listaAtual = await getUsuarios();
-    const atualizada = listaAtual.map((u) => (u.id === id ? { ...u, ...updates } : u));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(atualizada));
-    return atualizada;
-  } catch {
-    return [];
-  }
+  // Recarregar a lista atualizada
+  return await getUsuarios();
 }

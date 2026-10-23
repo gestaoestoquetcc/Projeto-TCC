@@ -47,6 +47,14 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
     { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/configuracoes' },
   ];
 
+  // Filtra os módulos da barra lateral de acordo com as permissões do perfil (RBAC)
+  const menuFiltrado = menuItems.filter((item) => {
+    if (perfil?.role === 'master') return true;
+    if (!perfil?.permissoes) return true;
+    if (item.id === 'configuracoes') return true; // Todos podem acessar a aba Meu Perfil
+    return perfil.permissoes[item.id] !== false;
+  });
+
   return (
     <aside className="w-64 bg-[#0d1117] text-gray-300 flex flex-col justify-between shrink-0 min-h-screen border-r border-[#1e2430]">
       {/* Top Header */}
@@ -71,7 +79,7 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
           </span>
 
           <nav className="space-y-1">
-            {menuItems.map((item) => {
+            {menuFiltrado.map((item) => {
               const Icon = item.icon;
               const isActive = item.id === activeTab;
 
@@ -135,14 +143,14 @@ export default function Sidebar({ activeTab = 'pecas', isDark = false, onToggleD
         <div className="flex items-center justify-between p-2 rounded-lg bg-[#161b22]/70 border border-[#21262d]/50 group">
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center text-white font-semibold text-xs tracking-wider shadow-sm shrink-0">
-              {perfil?.avatar_iniciais || 'AT'}
+              {perfil?.avatar_iniciais || (user?.email ? user.email.substring(0, 2).toUpperCase() : 'US')}
             </div>
             <div className="overflow-hidden">
               <h4 className="text-xs font-semibold text-gray-200 truncate">
-                {perfil?.nome || 'Arthur Teste'}
+                {perfil?.nome || user?.email?.split('@')[0] || 'Usuário'}
               </h4>
               <p className="text-[11px] text-gray-500 truncate">
-                {perfil?.cargo || 'Gerente de Estoque'}
+                {perfil?.cargo || (perfil?.role === 'master' ? 'Dono / Administrador' : 'Colaborador')}
               </p>
             </div>
           </div>

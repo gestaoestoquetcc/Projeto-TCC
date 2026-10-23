@@ -709,8 +709,8 @@ export default function ConfiguracoesPage() {
                   {perfil?.avatar_iniciais || 'AT'}
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">{meuNome || 'Arthur Teste'}</h3>
-                  <p className="text-xs text-gray-500 font-mono">{user?.email || 'arthur@autostock.com.br'}</p>
+                  <h3 className="text-lg font-bold text-gray-900">{meuNome || user?.user_metadata?.nome || user?.email?.split('@')[0] || 'Usuário'}</h3>
+                  <p className="text-xs text-gray-500 font-mono">{user?.email || ''}</p>
                   <div className="mt-1.5">
                     {getRoleBadge(perfil?.role || 'master')}
                   </div>

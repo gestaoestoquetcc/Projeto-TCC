@@ -15,7 +15,7 @@ import {
 import Sidebar from '../../components/layout/Sidebar';
 import ImportarNfeModal from '../../components/movimentacoes/ImportarNfeModal';
 import ScannerCodigoBarrasModal from '../../components/movimentacoes/ScannerCodigoBarrasModal';
-import { getPecas } from '../../services/pecasService';
+import { getPecas, insertPeca } from '../../services/pecasService';
 import { getMovimentacoes, registrarMovimentacao } from '../../services/movimentacoesService';
 
 export default function MovimentacoesPage() {
@@ -154,7 +154,18 @@ export default function MovimentacoesPage() {
         );
 
         if (!peca) {
-          peca = pecas[0];
+          try {
+            peca = await insertPeca({
+              sku: item.codigo || `SKU-${Date.now()}`,
+              nome: item.nome,
+              categoria: 'Combustão',
+              quantidade: 0,
+              pontoReposicao: Math.max(5, Math.round(item.quantidade * 0.3)),
+              precoVenda: Number(item.valorUnitario || 80) * 1.4
+            });
+          } catch {
+            peca = pecas[0];
+          }
         }
 
         if (peca) {

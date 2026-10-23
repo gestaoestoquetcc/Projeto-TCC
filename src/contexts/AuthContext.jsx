@@ -18,29 +18,59 @@ export function AuthProvider({ children }) {
         .single();
 
       if (!error && data) {
+        // Se a coluna e-mail estiver vazia no banco, sincroniza com o e-mail real do Auth
+        if (!data.email && email) {
+          try {
+            await supabase.from('perfis').update({ email }).eq('id', userId);
+            data.email = email;
+          } catch {
+            // ignore
+          }
+        }
         setPerfil(data);
-        return;
+        return data;
       }
     } catch {
       // ignore
     }
 
-    // Fallback: se a tabela de perfis demorar para responder ou ainda estiver sendo gerada pelo trigger
-    const nomeFallback = userMetadata?.nome || email?.split('@')[0] || 'Arthur Teste';
-    const cargoFallback = userMetadata?.cargo || 'Gerente de Estoque';
+    // Se o perfil ainda não existir na tabela (ex: primeiro acesso), cria o registro
+    const nomeFallback = userMetadata?.nome || email?.split('@')[0] || 'Usuário';
+    const cargoFallback = userMetadata?.cargo || (userMetadata?.role === 'master' ? 'Dono / Administrador' : 'Operador de Almoxarifado');
+    const roleFallback = userMetadata?.role || 'master';
     const iniciaisFallback = nomeFallback
       .split(' ')
       .map((n) => n[0])
       .slice(0, 2)
       .join('')
-      .toUpperCase() || 'AT';
+      .toUpperCase() || 'US';
 
-    setPerfil({
+    const novoPerfil = {
       id: userId,
       nome: nomeFallback,
+      email: email || '',
       cargo: cargoFallback,
-      avatar_iniciais: iniciaisFallback
-    });
+      role: roleFallback,
+      avatar_iniciais: iniciaisFallback,
+      ativo: true,
+      permissoes: userMetadata?.permissoes || {
+        dashboard: true,
+        pecas: true,
+        movimentacao: true,
+        previsao: roleFallback === 'master',
+        fornecedores: roleFallback === 'master',
+        usuarios: roleFallback === 'master'
+      }
+    };
+
+    try {
+      await supabase.from('perfis').upsert(novoPerfil);
+    } catch {
+      // ignore
+    }
+
+    setPerfil(novoPerfil);
+    return novoPerfil;
   };
 
   useEffect(() => {
@@ -89,23 +119,48 @@ export function AuthProvider({ children }) {
     });
 
     if (error) throw error;
+
+    if (data?.user) {
+      const p = await buscarPerfil(data.user.id, data.user.user_metadata, data.user.email);
+      // Checar se o usuário foi desativado pelo Administrador da Loja
+      if (p && p.ativo === false) {
+        await signOut();
+        throw new Error('Acesso suspenso: Este usuário foi desativado pelo administrador da loja. Entre em contato com seu gestor.');
+      }
+    }
+
     return data;
   };
 
-  // Cadastro de Novo Usuário (com metadata de nome e cargo)
-  const signUp = async ({ nome, email, password, cargo = 'Gerente de Estoque' }) => {
+  // Cadastro de Nova Loja / Dono da Empresa (Role Master)
+  const signUp = async ({ nome, email, password, nomeLoja = '', cargo = 'Dono / Administrador' }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          nome,
-          cargo
+          nome: nome.trim(),
+          cargo: cargo.trim(),
+          nome_loja: nomeLoja.trim(),
+          role: 'master',
+          permissoes: {
+            dashboard: true,
+            pecas: true,
+            movimentacao: true,
+            previsao: true,
+            fornecedores: true,
+            usuarios: true
+          }
         }
       }
     });
 
     if (error) throw error;
+
+    if (data?.user) {
+      await buscarPerfil(data.user.id, data.user.user_metadata, email);
+    }
+
     return data;
   };
 
@@ -185,7 +240,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const isMaster = perfil?.role === 'master' || perfil?.cargo?.toLowerCase().includes('master') || perfil?.cargo?.toLowerCase().includes('diretor') || true;
+  const isMaster = perfil?.role === 'master' || perfil?.cargo?.toLowerCase().includes('master') || perfil?.cargo?.toLowerCase().includes('dono') || perfil?.cargo?.toLowerCase().includes('diretor');
 
   return (
     <AuthContext.Provider

@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import AuthPage from "./pages/public/AuthPage";
 import RedefinirSenha from "./pages/public/RedefinirSenha";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 import DashboardPage from "./pages/private/dashboard";
 import EstoquePage from "./pages/private/estoque";
 import MovimentacoesPage from "./pages/private/movimentacoes";
@@ -19,17 +20,17 @@ export default function Router() {
       <Route path="/redefinir-senha" element={<RedefinirSenha />} />
       <Route path="/reset-password" element={<RedefinirSenha />} />
 
-      {/* Rotas Principais do Sistema AutoStock */}
-      <Route path="/" element={<DashboardPage />} />
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/pecas" element={<EstoquePage />} />
-      <Route path="/estoque" element={<EstoquePage />} />
-      <Route path="/previsao" element={<PrevisaoPage />} />
-      <Route path="/previsao-ia" element={<PrevisaoPage />} />
-      <Route path="/movimentacao" element={<MovimentacoesPage />} />
-      <Route path="/entrada-saida" element={<MovimentacoesPage />} />
-      <Route path="/fornecedores" element={<FornecedoresPage />} />
-      <Route path="/configuracoes" element={<ConfiguracoesPage />} />
+      {/* Rotas Principais Protegidas do Sistema AutoStock */}
+      <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+      <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+      <Route path="/pecas" element={<ProtectedRoute><EstoquePage /></ProtectedRoute>} />
+      <Route path="/estoque" element={<ProtectedRoute><EstoquePage /></ProtectedRoute>} />
+      <Route path="/previsao" element={<ProtectedRoute><PrevisaoPage /></ProtectedRoute>} />
+      <Route path="/previsao-ia" element={<ProtectedRoute><PrevisaoPage /></ProtectedRoute>} />
+      <Route path="/movimentacao" element={<ProtectedRoute><MovimentacoesPage /></ProtectedRoute>} />
+      <Route path="/entrada-saida" element={<ProtectedRoute><MovimentacoesPage /></ProtectedRoute>} />
+      <Route path="/fornecedores" element={<ProtectedRoute><FornecedoresPage /></ProtectedRoute>} />
+      <Route path="/configuracoes" element={<ProtectedRoute><ConfiguracoesPage /></ProtectedRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

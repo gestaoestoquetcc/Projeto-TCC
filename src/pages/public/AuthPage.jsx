@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   FiMail, 
@@ -10,7 +10,8 @@ import {
   FiCheckCircle, 
   FiAlertCircle, 
   FiLoader,
-  FiArrowRight
+  FiArrowRight,
+  FiShield
 } from 'react-icons/fi';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -38,19 +39,26 @@ function AutoStockLogoMark() {
 export default function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signIn, signUp, resetPassword } = useAuth();
+  const { user, isAuthenticated, signIn, signUp, resetPassword } = useAuth();
 
   // 'login', 'cadastro', 'recuperar'
   const [abaAtiva, setAbaAtiva] = useState(
     location.pathname === '/cadastro' ? 'cadastro' : location.pathname === '/recuperar-senha' ? 'recuperar' : 'login'
   );
 
+  // Redireciona usuários já logados para a visão geral do sistema
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
   // Estados de formulário
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [nome, setNome] = useState('');
-  const [cargo, setCargo] = useState('Operador de Almoxarifado');
+  const [nomeLoja, setNomeLoja] = useState('');
 
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -110,6 +118,10 @@ export default function AuthPage() {
       console.error(err);
       if (err.message?.includes('Invalid login credentials')) {
         setErro('Credenciais inválidas. Verifique seu e-mail e senha.');
+      } else if (err.message?.includes('Email not confirmed')) {
+        setErro('E-mail não confirmado. Certifique-se de que a opção "Confirm email" está desmarcada no painel do Supabase.');
+      } else if (err.message?.includes('bloqueado') || err.message?.includes('desativado') || err.message?.includes('suspenso')) {
+        setErro(err.message);
       } else {
         setErro(err.message || 'Erro ao realizar login.');
       }
@@ -125,6 +137,11 @@ export default function AuthPage() {
 
     if (!nome.trim() || !email.trim() || !senha) {
       setErro('Preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    if (!nomeLoja.trim()) {
+      setErro('Informe o nome da sua loja ou empresa.');
       return;
     }
 
@@ -144,9 +161,10 @@ export default function AuthPage() {
         nome: nome.trim(),
         email: email.trim(),
         password: senha,
-        cargo: cargo.trim() || 'Operador de Almoxarifado'
+        nomeLoja: nomeLoja.trim(),
+        cargo: 'Dono / Administrador Master'
       });
-      setSucesso('Conta criada com sucesso! Você já pode entrar.');
+      setSucesso('Conta da loja criada com sucesso! Você já pode entrar.');
       setTimeout(() => {
         handleMudarAba('login');
       }, 1500);
@@ -157,7 +175,7 @@ export default function AuthPage() {
       } else if (err.message?.includes('rate limit') || err.status === 429) {
         setErro('Limite de envios do Supabase atingido. Tente novamente mais tarde.');
       } else {
-        setErro(err.message || 'Erro ao criar conta.');
+        setErro(err.message || 'Erro ao criar conta da loja.');
       }
     } finally {
       setLoading(false);
@@ -216,13 +234,13 @@ export default function AuthPage() {
           {/* Título da Aba */}
           <div className="mb-6">
             <h2 className="text-lg font-bold text-gray-900">
-              {abaAtiva === 'login' && 'Entrar na sua conta'}
-              {abaAtiva === 'cadastro' && 'Criar sua conta'}
+              {abaAtiva === 'login' && 'Acesso ao Sistema'}
+              {abaAtiva === 'cadastro' && 'Cadastrar Nova Loja'}
               {abaAtiva === 'recuperar' && 'Recuperar senha'}
             </h2>
             <p className="text-xs text-gray-500 mt-1">
-              {abaAtiva === 'login' && 'Digite seu e-mail e senha para acessar o painel.'}
-              {abaAtiva === 'cadastro' && 'Preencha seus dados para começar.'}
+              {abaAtiva === 'login' && 'Entre com as credenciais da sua loja ou as fornecidas pelo seu administrador.'}
+              {abaAtiva === 'cadastro' && 'Crie o acesso master da sua empresa para gerenciar estoque, equipes e IA.'}
               {abaAtiva === 'recuperar' && 'Enviaremos um link de recuperação no seu e-mail.'}
             </p>
           </div>
@@ -314,27 +332,32 @@ export default function AuthPage() {
                 )}
               </button>
 
-              <div className="pt-4 border-t border-[#f0ede6] text-center text-xs text-gray-600">
-                Não tem uma conta?{' '}
-                <button
-                  type="button"
-                  onClick={() => handleMudarAba('cadastro')}
-                  className="font-bold text-[#c8672b] hover:text-[#ad531c] transition-colors"
-                >
-                  Cadastre-se
-                </button>
+              <div className="pt-4 border-t border-[#f0ede6] space-y-2 text-center text-xs text-gray-600">
+                <div>
+                  Deseja usar o AutoStock na sua empresa?{' '}
+                  <button
+                    type="button"
+                    onClick={() => handleMudarAba('cadastro')}
+                    className="font-bold text-[#c8672b] hover:text-[#ad531c] transition-colors"
+                  >
+                    Cadastrar Nova Loja
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  Colaboradores e estoquistas devem acessar com o login gerado pelo administrador da sua loja.
+                </p>
               </div>
             </form>
           )}
 
           {/* ========================================================= */}
-          {/* 2. FORMULÁRIO DE CADASTRO                                 */}
+          {/* 2. FORMULÁRIO DE CADASTRO DA LOJA (DONO / MASTER)          */}
           {/* ========================================================= */}
           {abaAtiva === 'cadastro' && (
             <form onSubmit={handleCadastro} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Nome Completo
+                  Nome do Dono / Responsável
                 </label>
                 <div className="relative">
                   <FiUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -342,7 +365,7 @@ export default function AuthPage() {
                     type="text"
                     value={nome}
                     onChange={(e) => setNome(e.target.value)}
-                    placeholder="Ex: Carlos Mendes"
+                    placeholder="Ex: Arthur Silva"
                     required
                     className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-[#dcd6ca] rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#c8672b] focus:ring-1 focus:ring-[#c8672b] transition-all"
                   />
@@ -351,7 +374,24 @@ export default function AuthPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  E-mail
+                  Nome da Loja / Distribuidora
+                </label>
+                <div className="relative">
+                  <FiBriefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={nomeLoja}
+                    onChange={(e) => setNomeLoja(e.target.value)}
+                    placeholder="Ex: Auto Peças Silva, Distribuidora Central"
+                    required
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-[#dcd6ca] rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#c8672b] focus:ring-1 focus:ring-[#c8672b] transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  E-mail Corporativo do Administrador
                 </label>
                 <div className="relative">
                   <FiMail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -359,29 +399,10 @@ export default function AuthPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu.email@empresa.com"
+                    placeholder="dono@suaempresa.com.br"
                     required
                     className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-[#dcd6ca] rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#c8672b] focus:ring-1 focus:ring-[#c8672b] transition-all"
                   />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Função / Cargo
-                </label>
-                <div className="relative">
-                  <FiBriefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <select
-                    value={cargo}
-                    onChange={(e) => setCargo(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-[#dcd6ca] rounded-xl text-sm text-gray-900 focus:outline-none focus:border-[#c8672b] focus:ring-1 focus:ring-[#c8672b] transition-all cursor-pointer"
-                  >
-                    <option value="Operador de Almoxarifado">Operador de Almoxarifado</option>
-                    <option value="Gerente de Estoque">Gerente de Estoque</option>
-                    <option value="Comprador / Suprimentos">Comprador / Suprimentos</option>
-                    <option value="Administrador do Sistema">Administrador do Sistema</option>
-                  </select>
                 </div>
               </div>
 
@@ -438,6 +459,11 @@ export default function AuthPage() {
                 </div>
               )}
 
+              <div className="p-3 bg-[#fcf5ec] border border-[#f4e2ca] rounded-xl text-[11px] text-[#935413] flex items-start gap-2">
+                <FiShield className="w-4 h-4 text-[#b36d1b] shrink-0 mt-0.5" />
+                <span>Esta conta terá permissão <strong>Master</strong> da sua loja para cadastrar funcionários, definir permissões e gerenciar peças e IA.</span>
+              </div>
+
               <button
                 type="submit"
                 disabled={loading}
@@ -446,10 +472,10 @@ export default function AuthPage() {
                 {loading ? (
                   <>
                     <FiLoader className="w-4 h-4 animate-spin" />
-                    <span>Cadastrando...</span>
+                    <span>Cadastrando loja...</span>
                   </>
                 ) : (
-                  <span>Criar conta</span>
+                  <span>Cadastrar Loja & Começar</span>
                 )}
               </button>
 
